@@ -88,4 +88,4 @@
 - [x] Update version to `0.2.0`.
 - [x] Update changelog and release notes.
 - [x] Run full build and privacy scans.
-- [ ] Commit, push, merge to main, tag `v0.2.0`, and create a GitHub release.
+- [x] Commit, push, merge to main, tag `v0.2.0`, and create a GitHub release.
