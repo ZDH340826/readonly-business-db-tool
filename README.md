@@ -1,23 +1,26 @@
-# 只读业务数据库工具 - 第一阶段
+# 只读业务数据库工具
 
-当前版本：`0.1.0`
+当前版本：`0.2.0`
 
-这是一个 Windows 本地 Java Swing 工具，用于现场只读数据库查看和点位缺料报警。它不是 database client 替代品，第一阶段只做业务需要的安全子集。
+这是一个 Windows 本地 Java Swing 工具，用于只读查看业务数据库，并按区域/物料组监控点位缺料风险。它不是通用数据库客户端替代品，不提供 SQL 编辑器，不提供任何数据修改功能。
 
 ## 功能
 
-- 连接管理：保存多个连接配置，支持示例 PostgreSQL 和本地测试库。
-- 密码策略：密码只在本次运行中输入和使用，不保存到任何配置文件。
-- 数据库浏览器：只读查看 schema、table/view、column，可预览表或视图前 100 行。
-- 点位缺料报警：监控指定点位是否有货架，支持每个点位独立监测周期。
-- 报警确认：报警窗口必须手动点击“已关注”才会关闭；同一异常在恢复前不重复弹窗。
-- 本地测试库：可不连接现场数据库，先验证界面、浏览器和报警逻辑。
+- 连接管理：保存多个连接配置，支持 PostgreSQL 和本地 H2 测试库。
+- 密码策略：密码只在本次运行中输入和使用，不保存到配置文件。
+- 数据库浏览器：只读查看 schema、table/view、column，并预览前 100 行。
+- 点位组缺料报警：按区域、物料组配置 1 个使用位和多个备用位。
+- 自定义报警规则：支持“使用位无货架”“备用位有料数量低于阈值”“持续 N 分钟后报警”。
+- 固定检测周期：系统每 60 秒检测一次点位组。
+- 报警确认：报警窗口必须手动点击“已关注”才会关闭。
+- 日志系统：记录每次检测快照和报警/确认/恢复事件。
+- 本地测试库：无需连接现场数据库即可验证界面、浏览器和报警逻辑。
 
-## 严格只读边界
+## 只读边界
 
-程序不提供通用 SQL 编辑器，不提供任何数据编辑按钮。
+程序不提供通用 SQL 编辑器，不提供表格编辑、插入、删除、更新按钮。
 
-数据库访问限制：
+数据库访问边界：
 
 ```sql
 SET TRANSACTION READ ONLY;
@@ -29,30 +32,45 @@ SET TRANSACTION READ ONLY;
 - 数据库浏览器只使用 JDBC metadata 和固定 SELECT。
 - 表预览只执行 `SELECT * FROM schema.table LIMIT 100`。
 - schema/table 名必须通过标识符校验。
-- 自动报警只查询配置的点位，不写入数据库。
+- 点位组监控只查询配置的点位，不写入数据库。
 
-仍建议使用数据库只读账号运行。
+生产环境仍建议使用数据库只读账号运行。
 
-## 运行
+## 构建与运行
 
 ```powershell
 .\build.ps1
 .\dist\ShelfPointMonitor\ShelfPointMonitor.bat
 ```
 
-启动后先进入“连接管理”，选择连接，输入密码，点击“测试并使用连接”。之后可进入“数据库浏览器”或“点位缺料报警”。
-
 构建脚本会读取根目录 `VERSION`，生成版本化压缩包：
 
 ```text
-dist/ReadonlyBusinessDbTool-v0.1.0.zip
+dist/ReadonlyBusinessDbTool-v0.2.0.zip
 ```
 
-版本策略见 [docs/VERSIONING.md](docs/VERSIONING.md)。
+## 默认样例
 
-## 默认点位
+默认本地测试库和点位组使用公开样例数据：
 
-- 使用位：`USE_POINT_001`，监测周期 1 分钟。
-- 备用位：`BACKUP_POINT_001`，监测周期 10 分钟。
+- 使用位：`USE_POINT_001`
+- 备用位：`BACKUP_POINT_001`
+- 备用位：`BACKUP_POINT_002`
+- 备用位：`BACKUP_POINT_003`
+- 备用位：`BACKUP_POINT_004`
 
+默认规则：
 
+- 使用位无货架。
+- 4 个备用位中至少 3 个需要有货架。
+- 条件持续 5 分钟后报警。
+
+## 文档
+
+- 使用说明书：[docs/manuals/point-shortage-alert-user-manual.md](docs/manuals/point-shortage-alert-user-manual.md)
+- 版本策略：[docs/VERSIONING.md](docs/VERSIONING.md)
+- 发布说明：[docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)
+
+## 版本
+
+见 [CHANGELOG.md](CHANGELOG.md)。

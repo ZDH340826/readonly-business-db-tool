@@ -84,8 +84,8 @@
 - Modify: `VERSION`
 - Create: `docs/releases/v0.2.0.md`
 
-- [ ] Write an Obsidian-ready Chinese user manual.
-- [ ] Update version to `0.2.0`.
-- [ ] Update changelog and release notes.
-- [ ] Run full build and privacy scans.
+- [x] Write an Obsidian-ready Chinese user manual.
+- [x] Update version to `0.2.0`.
+- [x] Update changelog and release notes.
+- [x] Run full build and privacy scans.
 - [ ] Commit, push, merge to main, tag `v0.2.0`, and create a GitHub release.
