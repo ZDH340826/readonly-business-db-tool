@@ -1,0 +1,26 @@
+# Build output
+/build/
+/dist/
+/lib/
+
+# Runtime state
+/logs/
+/data/
+*.log
+*.mv.db
+*.trace.db
+
+# Local configuration
+config.properties
+connections.properties
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Java artifacts
+*.class
+*.jar
