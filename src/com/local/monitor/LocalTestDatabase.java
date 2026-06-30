@@ -16,8 +16,7 @@ public final class LocalTestDatabase {
             try (Statement st = conn.createStatement()) {
                 st.execute("delete from public.shelf_point_status");
             }
-            insertPoint(conn, "USE_POINT_001", null, 1, 0, "AREA_USE", "AREA_BUFFER");
-            insertPoint(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0, "AREA_BUFFER", "AREA_NEXT");
+            insertDefaultPoints(conn);
         }
     }
 
@@ -28,12 +27,21 @@ public final class LocalTestDatabase {
             if ("normal".equalsIgnoreCase(scenario)) {
                 updatePod(conn, "USE_POINT_001", "SHELF_USE_001");
                 updatePod(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001");
+                updatePod(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002");
+                updatePod(conn, "BACKUP_POINT_003", "SHELF_BACKUP_003");
+                updatePod(conn, "BACKUP_POINT_004", "SHELF_BACKUP_004");
             } else if ("missing-use".equalsIgnoreCase(scenario)) {
                 updatePod(conn, "USE_POINT_001", null);
                 updatePod(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001");
+                updatePod(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002");
+                updatePod(conn, "BACKUP_POINT_003", null);
+                updatePod(conn, "BACKUP_POINT_004", null);
             } else if ("missing-backup".equalsIgnoreCase(scenario)) {
                 updatePod(conn, "USE_POINT_001", "SHELF_USE_001");
                 updatePod(conn, "BACKUP_POINT_001", null);
+                updatePod(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002");
+                updatePod(conn, "BACKUP_POINT_003", "SHELF_BACKUP_003");
+                updatePod(conn, "BACKUP_POINT_004", "SHELF_BACKUP_004");
             } else {
                 throw new IllegalArgumentException("未知本地测试场景：" + scenario);
             }
@@ -48,8 +56,7 @@ public final class LocalTestDatabase {
                 var rs = st.executeQuery("select count(*) from public.shelf_point_status");
                 rs.next();
                 if (rs.getInt(1) == 0) {
-                    insertPoint(conn, "USE_POINT_001", null, 1, 0, "AREA_USE", "AREA_BUFFER");
-                    insertPoint(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0, "AREA_BUFFER", "AREA_NEXT");
+                    insertDefaultPoints(conn);
                 }
             }
         }
@@ -69,6 +76,14 @@ public final class LocalTestDatabase {
                     + "updated_at timestamp,"
                     + "marked_at timestamp)");
         }
+    }
+
+    private static void insertDefaultPoints(Connection conn) throws Exception {
+        insertPoint(conn, "USE_POINT_001", null, 1, 0, "AREA_USE", "AREA_BUFFER");
+        insertPoint(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0, "AREA_BUFFER", "AREA_NEXT");
+        insertPoint(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002", 1, 0, "AREA_BUFFER", "AREA_NEXT");
+        insertPoint(conn, "BACKUP_POINT_003", null, 1, 0, "AREA_BUFFER", "AREA_NEXT");
+        insertPoint(conn, "BACKUP_POINT_004", null, 1, 0, "AREA_BUFFER", "AREA_NEXT");
     }
 
     private static void insertPoint(Connection conn, String code, String podCode, int status, int indLock,

@@ -57,10 +57,10 @@
 - Modify: `build.ps1`
 - Modify: existing tests that assume only two seeded points
 
-- [ ] Seed one use point and four backup points in the public local H2 database.
-- [ ] Add new tests to the build script.
-- [ ] Run full build.
-- [ ] Commit and push the branch.
+- [x] Seed one use point and four backup points in the public local H2 database.
+- [x] Add new tests to the build script.
+- [x] Run full build.
+- [x] Commit and push the branch.
 
 ### Task 5: Alert Page UI And Monitoring Loop
 

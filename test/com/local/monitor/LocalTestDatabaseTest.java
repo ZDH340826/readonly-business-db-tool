@@ -2,35 +2,39 @@ package com.local.monitor;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class LocalTestDatabaseTest {
     public static void main(String[] args) throws Exception {
         relativeLocalPathIsConvertedToUsableDatabaseUrl();
+        seededDatabaseSupportsGroupShortageScenario();
+        System.out.println("LocalTestDatabaseTest PASS");
+    }
 
+    private static void seededDatabaseSupportsGroupShortageScenario() throws Exception {
         Path dir = Files.createTempDirectory("shelf-monitor-h2-test");
         DbConfig config = DbConfig.localTest(dir.resolve("monitor-test").toString(), 30);
-
         LocalTestDatabase.reset(config);
-        List<PointDefinition> points = List.of(
-                new PointDefinition("USE_POINT_001", "使用位"),
-                new PointDefinition("BACKUP_POINT_001", "备用位"));
 
+        PointGroupDefinition group = GroupConfigStore.defaultGroups().get(0);
         PointRepository repository = new PointRepository();
-        List<PointRecord> records = repository.fetch(config, new char[0], points);
-        MonitorEvaluation evaluation = MonitorLogic.evaluate(points, records, new AlertState());
+        List<PointRecord> records = repository.fetch(config, new char[0], pointDefinitions(group));
+        TestSupport.assertEquals(5, records.size(), "local test database should seed five point records");
 
-        TestSupport.assertEquals(2, records.size(), "local test database should seed two point records");
-        TestSupport.assertTrue(evaluation.hasActiveAlert(), "seed data should make use point missing");
-        TestSupport.assertEquals("使用位", evaluation.alerts().get(0).alias(), "missing use point should alert");
-        TestSupport.assertContains(evaluation.alerts().get(0).message(), "无货架", "alert should explain missing material");
+        GroupRuntimeState state = new GroupRuntimeState();
+        GroupEvaluation evaluation = null;
+        for (int i = 0; i < group.rule().durationMinutes(); i++) {
+            evaluation = GroupMonitorLogic.evaluate(group, records, state);
+        }
+        TestSupport.assertEquals(GroupAlertStatus.ACTIVE_ALERT, evaluation.status(),
+                "seed data should make default group alert after duration");
+        TestSupport.assertTrue(evaluation.shouldShowDialog(), "first active group alert should request dialog");
 
         LocalTestDatabase.setScenario(config, "normal");
-        records = repository.fetch(config, new char[0], points);
-        evaluation = MonitorLogic.evaluate(points, records, new AlertState());
-        TestSupport.assertFalse(evaluation.hasActiveAlert(), "normal local scenario should not alert");
-
-        System.out.println("LocalTestDatabaseTest PASS");
+        records = repository.fetch(config, new char[0], pointDefinitions(group));
+        evaluation = GroupMonitorLogic.evaluate(group, records, state);
+        TestSupport.assertEquals(GroupAlertStatus.NORMAL, evaluation.status(), "normal local scenario should recover");
     }
 
     private static void relativeLocalPathIsConvertedToUsableDatabaseUrl() throws Exception {
@@ -39,6 +43,16 @@ public final class LocalTestDatabaseTest {
         TestSupport.assertFalse(
                 config.jdbcUrl().contains("jdbc:h2:file:data") || config.jdbcUrl().contains("jdbc:h2:file:build"),
                 "local H2 database URL must not use an implicit relative path");
+    }
+
+    private static List<PointDefinition> pointDefinitions(PointGroupDefinition group) {
+        List<PointDefinition> points = new ArrayList<>();
+        for (GroupMonitorPoint point : group.points()) {
+            if (point.enabled()) {
+                points.add(new PointDefinition(point.code(), point.alias()));
+            }
+        }
+        return points;
     }
 
     private static final class TestSupport {
@@ -57,13 +71,5 @@ public final class LocalTestDatabaseTest {
                 throw new AssertionError(message + " expected=" + expected + " actual=" + actual);
             }
         }
-
-        static void assertContains(String text, String needle, String message) {
-            if (text == null || !text.contains(needle)) {
-                throw new AssertionError(message + " text=" + text + " needle=" + needle);
-            }
-        }
     }
 }
-
-

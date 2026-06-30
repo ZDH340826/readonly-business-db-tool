@@ -62,12 +62,18 @@ if ($LASTEXITCODE -ne 0) { throw "javac test failed with exit code $LASTEXITCODE
 
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitorLogicTest
 if ($LASTEXITCODE -ne 0) { throw "tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupMonitorLogicTest
+if ($LASTEXITCODE -ne 0) { throw "group logic tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.LocalTestDatabaseTest
 if ($LASTEXITCODE -ne 0) { throw "local database tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PointScheduleTest
 if ($LASTEXITCODE -ne 0) { throw "point schedule tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ConfigStoreTest
 if ($LASTEXITCODE -ne 0) { throw "config store tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupConfigStoreTest
+if ($LASTEXITCODE -ne 0) { throw "group config store tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupLogWriterTest
+if ($LASTEXITCODE -ne 0) { throw "group log writer tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ConnectionProfileStoreTest
 if ($LASTEXITCODE -ne 0) { throw "connection profile tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DbMetadataRepositoryTest
@@ -160,8 +166,53 @@ schema=public
 user=readonly_user
 sslmode=disable
 intervalSeconds=10
-points=\u4f7f\u7528\u4f4d=USE_POINT_001=1;\u5907\u7528\u4f4d=BACKUP_POINT_001=10
+points=Use=USE_POINT_001=1;Backup 1=BACKUP_POINT_001=10;Backup 2=BACKUP_POINT_002=10;Backup 3=BACKUP_POINT_003=10;Backup 4=BACKUP_POINT_004=10
 '@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'data\config.properties')
+
+@'
+group.count=1
+group.0.id=sample-group-001
+group.0.areaName=Area A
+group.0.groupName=Sample Material Group
+group.0.materialName=Sample Material
+group.0.enabled=true
+group.0.checkIntervalSeconds=60
+group.0.rule.enabled=true
+group.0.rule.requireUsePointEmpty=true
+group.0.rule.minBackupAvailable=3
+group.0.rule.durationMinutes=5
+group.0.point.count=5
+group.0.point.0.id=sample-use-001
+group.0.point.0.code=USE_POINT_001
+group.0.point.0.alias=Use
+group.0.point.0.role=USE
+group.0.point.0.enabled=true
+group.0.point.0.sortOrder=1
+group.0.point.1.id=sample-backup-001
+group.0.point.1.code=BACKUP_POINT_001
+group.0.point.1.alias=Backup 1
+group.0.point.1.role=BACKUP
+group.0.point.1.enabled=true
+group.0.point.1.sortOrder=2
+group.0.point.2.id=sample-backup-002
+group.0.point.2.code=BACKUP_POINT_002
+group.0.point.2.alias=Backup 2
+group.0.point.2.role=BACKUP
+group.0.point.2.enabled=true
+group.0.point.2.sortOrder=3
+group.0.point.3.id=sample-backup-003
+group.0.point.3.code=BACKUP_POINT_003
+group.0.point.3.alias=Backup 3
+group.0.point.3.role=BACKUP
+group.0.point.3.enabled=true
+group.0.point.3.sortOrder=4
+group.0.point.4.id=sample-backup-004
+group.0.point.4.code=BACKUP_POINT_004
+group.0.point.4.alias=Backup 4
+group.0.point.4.role=BACKUP
+group.0.point.4.enabled=true
+group.0.point.4.sortOrder=5
+'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'data\group-config.properties')
 
 @'
 currentProfile=prod
