@@ -23,10 +23,10 @@
 - Create: `src/com/local/monitor/GroupMonitorLogic.java`
 - Test: `test/com/local/monitor/GroupMonitorLogicTest.java`
 
-- [ ] Write failing tests for healthy, pending, active, acknowledged, and recovered group states.
-- [ ] Implement the core classes and state transition logic.
-- [ ] Run `GroupMonitorLogicTest` and existing monitor tests.
-- [ ] Commit and push the branch.
+- [x] Write failing tests for healthy, pending, active, acknowledged, and recovered group states.
+- [x] Implement the core classes and state transition logic.
+- [x] Run `GroupMonitorLogicTest` and existing monitor tests.
+- [x] Commit and push the branch.
 
 ### Task 2: Group Config Store
 
