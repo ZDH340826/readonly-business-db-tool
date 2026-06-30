@@ -34,10 +34,10 @@
 - Create: `src/com/local/monitor/GroupConfigStore.java`
 - Test: `test/com/local/monitor/GroupConfigStoreTest.java`
 
-- [ ] Write failing tests for saving/loading groups and rejecting invalid group definitions.
-- [ ] Implement a UTF-8 properties-backed local config format under `data/group-config.properties`.
-- [ ] Run config and group logic tests.
-- [ ] Commit and push the branch.
+- [x] Write failing tests for saving/loading groups and rejecting invalid group definitions.
+- [x] Implement a UTF-8 properties-backed local config format under `data/group-config.properties`.
+- [x] Run config and group logic tests.
+- [x] Commit and push the branch.
 
 ### Task 3: Group Log Writer
 
