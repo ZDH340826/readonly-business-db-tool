@@ -68,12 +68,12 @@
 - Modify: `src/com/local/monitor/ShelfPointMonitorApp.java`
 - Modify: `test/com/local/monitor/ShelfPointMonitorAppUiTest.java`
 
-- [ ] Replace point-level alert UI with group list, group detail fields, point table, rule controls, runtime status, and monitor buttons.
-- [ ] Use current readonly connection and `PointRepository.fetch` for enabled group points.
-- [ ] Evaluate groups every 60 seconds.
-- [ ] Show group-level dialogs and write logs.
-- [ ] Run UI and full build tests.
-- [ ] Commit and push the branch.
+- [x] Replace point-level alert UI with group list, group detail fields, point table, rule controls, runtime status, and monitor buttons.
+- [x] Use current readonly connection and `PointRepository.fetch` for enabled group points.
+- [x] Evaluate groups every 60 seconds.
+- [x] Show group-level dialogs and write logs.
+- [x] Run UI and full build tests.
+- [x] Commit and push the branch.
 
 ### Task 6: Manual And Version Prep
 

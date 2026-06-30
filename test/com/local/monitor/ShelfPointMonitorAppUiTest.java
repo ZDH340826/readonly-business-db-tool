@@ -8,11 +8,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashSet;
 import java.util.Set;
 import javax.swing.JList;
+import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 
 public final class ShelfPointMonitorAppUiTest {
     public static void main(String[] args) throws Exception {
         appHasThreeNavigationPages();
+        alertPageContainsGroupPointTable();
         gridBagPanelsDoNotOverlapCells();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
     }
@@ -38,6 +40,18 @@ public final class ShelfPointMonitorAppUiTest {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
             try {
                 scanGridBagContainers(app.getContentPane());
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void alertPageContainsGroupPointTable() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                TestSupport.assertTrue(hasGroupPointTable(app.getContentPane()),
+                        "alert page should contain the group point table");
             } finally {
                 app.dispose();
             }
@@ -82,6 +96,23 @@ public final class ShelfPointMonitorAppUiTest {
             }
         }
         return null;
+    }
+
+    private static boolean hasGroupPointTable(Container container) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JTable) {
+                JTable table = (JTable) component;
+                if (table.getColumnCount() == 4
+                        && "角色".equals(table.getColumnName(0))
+                        && "点位编码".equals(table.getColumnName(2))) {
+                    return true;
+                }
+            }
+            if (component instanceof Container && hasGroupPointTable((Container) component)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void runOnEdtAndWait(ThrowingRunnable runnable) throws Exception {
