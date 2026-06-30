@@ -1,6 +1,14 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$versionFile = Join-Path $root 'VERSION'
+if (!(Test-Path $versionFile)) {
+    throw "VERSION file is required"
+}
+$version = (Get-Content -Raw -Path $versionFile).Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+    throw "Invalid VERSION value: $version"
+}
 $src = Join-Path $root 'src'
 $test = Join-Path $root 'test'
 $build = Join-Path $root 'build'
@@ -71,6 +79,7 @@ if (Test-Path $dist) {
     Remove-Item -LiteralPath $dist -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $dist, (Join-Path $dist 'lib'), (Join-Path $dist 'data'), (Join-Path $dist 'logs') | Out-Null
+Set-Content -Encoding ASCII -Path (Join-Path $dist 'VERSION') -Value $version
 
 & $jar --create --file (Join-Path $dist 'ShelfPointMonitor.jar') --main-class com.local.monitor.ShelfPointMonitorApp -C $classes .
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
@@ -186,13 +195,12 @@ if (!(Test-Path $runtimeJava)) {
 & $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset (Join-Path $dist 'data\local-test-db')
 if ($LASTEXITCODE -ne 0) { throw "local test database creation failed with exit code $LASTEXITCODE" }
 
-$zip = Join-Path $root 'dist\ShelfPointMonitor-MVP.zip'
-if (Test-Path $zip) {
-    Remove-Item -LiteralPath $zip -Force
-}
+Get-ChildItem -Path (Join-Path $root 'dist') -Filter '*.zip' -File | Remove-Item -Force
+$zip = Join-Path $root ("dist\ReadonlyBusinessDbTool-v$version.zip")
 Compress-Archive -Path $dist -DestinationPath $zip -Force
 
 Write-Host "Built: $dist"
+Write-Host "Version: $version"
 Write-Host "Zip:   $zip"
 
 

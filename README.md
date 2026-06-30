@@ -1,5 +1,7 @@
 # 只读业务数据库工具 - 第一阶段
 
+当前版本：`0.1.0`
+
 这是一个 Windows 本地 Java Swing 工具，用于现场只读数据库查看和点位缺料报警。它不是 database client 替代品，第一阶段只做业务需要的安全子集。
 
 ## 功能
@@ -39,6 +41,14 @@ SET TRANSACTION READ ONLY;
 ```
 
 启动后先进入“连接管理”，选择连接，输入密码，点击“测试并使用连接”。之后可进入“数据库浏览器”或“点位缺料报警”。
+
+构建脚本会读取根目录 `VERSION`，生成版本化压缩包：
+
+```text
+dist/ReadonlyBusinessDbTool-v0.1.0.zip
+```
+
+版本策略见 [docs/VERSIONING.md](docs/VERSIONING.md)。
 
 ## 默认点位
 
