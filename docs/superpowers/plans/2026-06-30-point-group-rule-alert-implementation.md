@@ -45,10 +45,10 @@
 - Create: `src/com/local/monitor/GroupLogWriter.java`
 - Test: `test/com/local/monitor/GroupLogWriterTest.java`
 
-- [ ] Write failing tests for `check-log.csv` and `event-log.csv` headers and rows.
-- [ ] Implement CSV escaping and append behavior.
-- [ ] Run log writer tests.
-- [ ] Commit and push the branch.
+- [x] Write failing tests for `check-log.csv` and `event-log.csv` headers and rows.
+- [x] Implement CSV escaping and append behavior.
+- [x] Run log writer tests.
+- [x] Commit and push the branch.
 
 ### Task 4: Local Test Data And Build
 
