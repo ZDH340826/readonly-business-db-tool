@@ -89,7 +89,12 @@ public final class MonitorLogicTest {
     private static void sqlBuilderOnlyBuildsWhitelistedSelect() {
         String sql = PointQuery.buildSelectSql("public", 2);
         TestSupport.assertTrue(sql.toLowerCase().startsWith("select "), "query must be SELECT");
-        TestSupport.assertContains(sql, "from public.shelf_point_status", "query targets point table only");
+        TestSupport.assertContains(sql, "map_data_code as point_code", "query maps site point code");
+        TestSupport.assertContains(sql, "pod_code as shelf_code", "query maps site shelf code");
+        TestSupport.assertContains(sql, "ind_lock as lock_state", "query maps site lock state");
+        TestSupport.assertContains(sql, "date_chg as updated_at", "query maps site update time");
+        TestSupport.assertContains(sql, "date_cr as marked_at", "query maps site created time");
+        TestSupport.assertContains(sql, "from public.tcs_map_data", "query targets site point table only");
         TestSupport.assertFalse(sql.toLowerCase().contains("update "), "query must not contain UPDATE");
         TestSupport.assertEquals(2, TestSupport.count(sql, "?"), "query should have one placeholder per point");
         TestSupport.assertThrows(IllegalArgumentException.class, () -> PointQuery.buildSelectSql("public;drop table x", 1),

@@ -17,11 +17,11 @@
 - Modify: `src/com/local/monitor/PointRepository.java`
 - Modify: `test/com/local/monitor/MonitorLogicTest.java`
 
-- [ ] Write a failing test that `PointQuery.buildSelectSql("public", 2)` selects from `public.tcs_map_data`.
-- [ ] Assert the SQL selects site columns with stable aliases: `map_data_code as point_code`, `pod_code as shelf_code`, `ind_lock as lock_state`, `date_chg as updated_at`, `date_cr as marked_at`.
-- [ ] Implement the SQL change.
-- [ ] Run `.\build.ps1` and verify the query test passes.
-- [ ] Commit and push.
+- [x] Write a failing test that `PointQuery.buildSelectSql("public", 2)` selects from `public.tcs_map_data`.
+- [x] Assert the SQL selects site columns with stable aliases: `map_data_code as point_code`, `pod_code as shelf_code`, `ind_lock as lock_state`, `date_chg as updated_at`, `date_cr as marked_at`.
+- [x] Implement the SQL change.
+- [x] Run `.\build.ps1` and verify the query test passes.
+- [x] Commit and push.
 
 ### Task 2: Local H2 Site Table
 
