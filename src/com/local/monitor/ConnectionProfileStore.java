@@ -43,11 +43,11 @@ public final class ConnectionProfileStore {
                     id,
                     p.getProperty(prefix + "name", id),
                     p.getProperty(prefix + "dbType", "postgres"),
-                    p.getProperty(prefix + "host", "127.0.0.1"),
-                    parseInt(p.getProperty(prefix + "port"), 5432),
-                    p.getProperty(prefix + "database", "example_db"),
+                    p.getProperty(prefix + "host", "__SITE_HOST__"),
+                    parseInt(p.getProperty(prefix + "port"), 2345),
+                    p.getProperty(prefix + "database", "cms_web"),
                     p.getProperty(prefix + "schema", "public"),
-                    p.getProperty(prefix + "user", "readonly_user"),
+                    p.getProperty(prefix + "user", "__SITE_USER__"),
                     p.getProperty(prefix + "sslmode", "disable"),
                     p.getProperty(prefix + "localPath", "data/local-test-db")));
         }
@@ -93,8 +93,8 @@ public final class ConnectionProfileStore {
 
     private static StoredProfiles defaultProfiles() {
         return new StoredProfiles("prod", List.of(
-                new ConnectionProfile("prod", "示例 PostgreSQL", "postgres", "127.0.0.1", 5432,
-                        "example_db", "public", "readonly_user", "disable", "data/local-test-db"),
+                new ConnectionProfile("prod", "现场数据库", "postgres", "__SITE_HOST__", 2345,
+                        "cms_web", "public", "__SITE_USER__", "disable", "data/local-test-db"),
                 new ConnectionProfile("local", "本地测试库", "h2", "local", 1,
                         "local-test", "public", "sa", "disable", "data/local-test-db")));
     }

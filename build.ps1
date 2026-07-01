@@ -157,13 +157,13 @@ endlocal
 '@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_MissingBackup.bat')
 
 @'
-host=127.0.0.1
+host=__SITE_HOST__
 dbType=postgres
 localPath=data/local-test-db
-port=5432
-database=example_db
+port=2345
+database=cms_web
 schema=public
-user=readonly_user
+user=__SITE_USER__
 sslmode=disable
 intervalSeconds=10
 points=Use=USE_POINT_001=1;Backup 1=BACKUP_POINT_001=10;Backup 2=BACKUP_POINT_002=10;Backup 3=BACKUP_POINT_003=10;Backup 4=BACKUP_POINT_004=10
@@ -218,13 +218,13 @@ group.0.point.4.sortOrder=5
 currentProfile=prod
 profile.count=2
 profile.0.id=prod
-profile.0.name=\u793a\u4f8b PostgreSQL
+profile.0.name=\u73b0\u573a\u6570\u636e\u5e93
 profile.0.dbType=postgres
-profile.0.host=127.0.0.1
-profile.0.port=5432
-profile.0.database=example_db
+profile.0.host=__SITE_HOST__
+profile.0.port=2345
+profile.0.database=cms_web
 profile.0.schema=public
-profile.0.user=readonly_user
+profile.0.user=__SITE_USER__
 profile.0.sslmode=disable
 profile.0.localPath=data/local-test-db
 profile.1.id=local

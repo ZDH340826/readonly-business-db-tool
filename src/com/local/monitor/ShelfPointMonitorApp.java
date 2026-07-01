@@ -85,7 +85,7 @@ public final class ShelfPointMonitorApp extends JFrame {
     private final JTextField profileNameField = new JTextField(14);
     private final JComboBox<String> profileDbTypeBox = new JComboBox<>(new String[] {"postgres", "h2"});
     private final JTextField profileHostField = new JTextField(16);
-    private final JSpinner profilePortSpinner = new JSpinner(new SpinnerNumberModel(5432, 1, 65535, 1));
+    private final JSpinner profilePortSpinner = new JSpinner(new SpinnerNumberModel(2345, 1, 65535, 1));
     private final JTextField profileDatabaseField = new JTextField(12);
     private final JTextField profileSchemaField = new JTextField(10);
     private final JTextField profileUserField = new JTextField(14);
@@ -222,26 +222,26 @@ public final class ShelfPointMonitorApp extends JFrame {
 
         JPanel form = new JPanel(new GridBagLayout());
         int row = 0;
-        addField(form, row, 0, "ID", profileIdField);
-        addField(form, row, 2, "名称", profileNameField);
-        addField(form, row, 4, "类型", profileDbTypeBox);
+        addField(form, row, 0, "连接ID", profileIdField);
+        addField(form, row, 2, "连接名称", profileNameField);
+        addField(form, row, 4, "数据库类型", profileDbTypeBox);
         row++;
-        addField(form, row, 0, "Host", profileHostField);
-        addField(form, row, 2, "Port", profilePortSpinner);
-        addField(form, row, 4, "Database", profileDatabaseField);
+        addField(form, row, 0, "服务器地址/IP", profileHostField);
+        addField(form, row, 2, "端口", profilePortSpinner);
+        addField(form, row, 4, "数据库名", profileDatabaseField);
         row++;
-        addField(form, row, 0, "Schema", profileSchemaField);
-        addField(form, row, 2, "User", profileUserField);
-        addField(form, row, 4, "sslmode", profileSslModeBox);
+        addField(form, row, 0, "数据库空间/Schema", profileSchemaField);
+        addField(form, row, 2, "用户名", profileUserField);
+        addField(form, row, 4, "SSL模式", profileSslModeBox);
         row++;
-        addField(form, row, 0, "本地库路径", profileLocalPathField);
-        addField(form, row, 2, "Password", profilePasswordField);
+        addField(form, row, 0, "本地测试库路径", profileLocalPathField);
+        addField(form, row, 2, "密码", profilePasswordField);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton newButton = new JButton("新建");
+        JButton newButton = new JButton("新建连接");
         JButton saveButton = new JButton("保存连接");
         JButton deleteButton = new JButton("删除连接");
-        JButton testButton = new JButton("测试并使用连接");
+        JButton testButton = new JButton("测试连接并使用");
         buttons.add(newButton);
         buttons.add(saveButton);
         buttons.add(deleteButton);
@@ -501,13 +501,13 @@ public final class ShelfPointMonitorApp extends JFrame {
 
     private void newProfileForm() {
         profileIdField.setText("profile" + System.currentTimeMillis());
-        profileNameField.setText("新连接");
+        profileNameField.setText("现场数据库");
         profileDbTypeBox.setSelectedItem("postgres");
-        profileHostField.setText("127.0.0.1");
-        profilePortSpinner.setValue(5432);
-        profileDatabaseField.setText("example_db");
+        profileHostField.setText("__SITE_HOST__");
+        profilePortSpinner.setValue(2345);
+        profileDatabaseField.setText("cms_web");
         profileSchemaField.setText("public");
-        profileUserField.setText("readonly_user");
+        profileUserField.setText("__SITE_USER__");
         profileSslModeBox.setSelectedItem("disable");
         profileLocalPathField.setText("data/local-test-db");
         profilePasswordField.setText("");
@@ -1370,5 +1370,3 @@ public final class ShelfPointMonitorApp extends JFrame {
         void run() throws Exception;
     }
 }
-
-

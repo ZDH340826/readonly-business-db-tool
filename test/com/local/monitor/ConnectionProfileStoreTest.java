@@ -38,6 +38,13 @@ public final class ConnectionProfileStoreTest {
         TestSupport.assertEquals(2, loaded.profiles().size(), "default profiles should include postgres and local");
         TestSupport.assertEquals("prod", loaded.currentId(), "default current profile should be prod");
         TestSupport.assertEquals("postgres", loaded.profiles().get(0).dbType(), "first default should be postgres");
+        TestSupport.assertEquals("现场数据库", loaded.profiles().get(0).name(), "default postgres should be site profile");
+        TestSupport.assertEquals("__SITE_HOST__", loaded.profiles().get(0).host(), "default host should be placeholder");
+        TestSupport.assertEquals(2345, loaded.profiles().get(0).port(), "default site port should be 2345");
+        TestSupport.assertEquals("cms_web", loaded.profiles().get(0).database(), "default site database should be cms_web");
+        TestSupport.assertEquals("public", loaded.profiles().get(0).schema(), "default site schema should be public");
+        TestSupport.assertEquals("__SITE_USER__", loaded.profiles().get(0).user(), "default user should be placeholder");
+        TestSupport.assertEquals("disable", loaded.profiles().get(0).sslMode(), "default sslmode should be disable");
         TestSupport.assertEquals("h2", loaded.profiles().get(1).dbType(), "second default should be local h2");
     }
 

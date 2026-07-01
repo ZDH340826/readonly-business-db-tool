@@ -18,7 +18,7 @@
 - Modify: `test/com/local/monitor/MonitorLogicTest.java`
 
 - [x] Write a failing test that `PointQuery.buildSelectSql("public", 2)` selects from `public.tcs_map_data`.
-- [x] Assert the SQL selects site columns with stable aliases: `map_data_code as point_code`, `pod_code as shelf_code`, `ind_lock as lock_state`, `date_chg as updated_at`, `date_cr as marked_at`.
+- [x] Assert the SQL selects site columns with stable aliases: `map_data_code as point_code`, `pod_code as shelf_code`, `ind_lock as lock_state`, `date_chg as updated_at`, `date_chg as marked_at`.
 - [x] Implement the SQL change.
 - [x] Run `.\build.ps1` and verify the query test passes.
 - [x] Commit and push.
@@ -45,12 +45,12 @@
 - Modify: `test/com/local/monitor/ShelfPointMonitorAppUiTest.java`
 - Modify: `build.ps1`
 
-- [ ] Write failing tests that default PostgreSQL profile uses `cms_web`, `2345`, `public`, `disable`, and placeholder host/user values.
-- [ ] Write a UI test that connection page labels include `服务器地址/IP`, `数据库名`, `数据库空间/Schema`, `用户名`, `密码`, `SSL模式`.
-- [ ] Replace operator-facing connection labels/buttons with Chinese text.
-- [ ] Update new-profile defaults and packaged `connections.properties` defaults.
-- [ ] Run `.\build.ps1`.
-- [ ] Commit and push.
+- [x] Write failing tests that default PostgreSQL profile uses `cms_web`, `2345`, `public`, `disable`, and placeholder host/user values.
+- [x] Write a UI test that connection page labels include `服务器地址/IP`, `数据库名`, `数据库空间/Schema`, `用户名`, `密码`, `SSL模式`.
+- [x] Replace operator-facing connection labels/buttons with Chinese text.
+- [x] Update new-profile defaults and packaged `connections.properties` defaults.
+- [x] Run `.\build.ps1`.
+- [x] Commit and push.
 
 ### Task 4: Documentation, Version, And Release Prep
 
