@@ -2,6 +2,27 @@
 
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
+## [0.3.0] - 2026-07-01
+
+### Added
+
+- Site-ready PostgreSQL point query for `public.tcs_map_data`.
+- Chinese connection-management labels for onsite operators.
+- Default connection profile for onsite setup using placeholder host/user values, port `2345`, database `cms_web`, schema `public`, and `sslmode=disable`.
+- Local H2 test database now mirrors the site point table shape with `tcs_map_data`.
+- UI and profile-store tests covering Chinese labels and site connection defaults.
+
+### Changed
+
+- Point monitoring now reads site fields through stable internal aliases: `map_data_code`, `pod_code`, `pod_status`, `status`, `ind_lock`, and `date_chg`.
+- Packaged connection templates no longer use generic `example_db` defaults.
+
+### Security
+
+- Passwords are still runtime-only and are not saved to `connections.properties`.
+- Public repository stores only table/field mapping and sample point identifiers.
+- Real IPs, usernames, passwords, and production point groups must remain local.
+
 ## [0.2.0] - 2026-06-30
 
 ### Added

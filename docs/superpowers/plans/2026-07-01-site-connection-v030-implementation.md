@@ -61,9 +61,9 @@
 - Modify: `docs/manuals/point-shortage-alert-user-manual.md`
 - Create: `docs/releases/v0.3.0.md`
 
-- [ ] Update version to `0.3.0`.
-- [ ] Document that users enter IP/username/password locally and passwords are not saved.
-- [ ] Document the public-safe site table mapping.
-- [ ] Document that real IPs, usernames, passwords, and point groups must not be committed.
-- [ ] Run full build and privacy scans.
-- [ ] Commit, push, tag `v0.3.0`, and create a GitHub release.
+- [x] Update version to `0.3.0`.
+- [x] Document that users enter IP/username/password locally and passwords are not saved.
+- [x] Document the public-safe site table mapping.
+- [x] Document that real IPs, usernames, passwords, and point groups must not be committed.
+- [x] Run full build and privacy scans.
+- [x] Commit, push, tag `v0.3.0`, and create a GitHub release.

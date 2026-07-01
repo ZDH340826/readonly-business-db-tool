@@ -1,6 +1,6 @@
 # 只读业务数据库工具
 
-当前版本：`0.2.0`
+当前版本：`0.3.0`
 
 这是一个 Windows 本地 Java Swing 工具，用于只读查看业务数据库，并按区域/物料组监控点位缺料风险。它不是通用数据库客户端替代品，不提供 SQL 编辑器，不提供任何数据修改功能。
 
@@ -46,8 +46,43 @@ SET TRANSACTION READ ONLY;
 构建脚本会读取根目录 `VERSION`，生成版本化压缩包：
 
 ```text
-dist/ReadonlyBusinessDbTool-v0.2.0.zip
+dist/ReadonlyBusinessDbTool-v0.3.0.zip
 ```
+
+## 现场连接配置
+
+新建连接时由现场运维在本机填写：
+
+| 字段 | 建议值/说明 |
+|---|---|
+| 连接名称 | 自定义，例如“现场数据库” |
+| 服务器地址/IP | 现场数据库 IP，本地填写，不提交到 Git |
+| 端口 | `2345` |
+| 数据库名 | `cms_web` |
+| 数据库空间/Schema | `public` |
+| 用户名 | 本地填写，不提交到 Git |
+| 密码 | 本次运行输入，不保存到配置文件 |
+| SSL模式 | `disable` |
+
+连接配置保存到本机 `data/connections.properties`。该文件位于运行目录内，已被 `.gitignore` 排除。
+
+## 现场点位表映射
+
+公开仓库允许保留只读查询所需的表名和字段名：
+
+| 数据库字段 | 软件内部含义 |
+|---|---|
+| `cms_web.public.tcs_map_data` | 点位状态来源表 |
+| `map_data_code` | 点位编码 |
+| `pod_code` | 货架编号 |
+| `pod_status` | 货架状态 |
+| `status` | 点位状态 |
+| `ind_lock` | 锁定状态 |
+| `area_code` | 区域编码 |
+| `relate_area_code` | 关联区域编码 |
+| `date_chg` | 更新时间 |
+
+禁止提交真实 IP、用户名、密码、生产点位组、真实点位清单和现场导出数据。
 
 ## 默认样例
 
@@ -69,7 +104,7 @@ dist/ReadonlyBusinessDbTool-v0.2.0.zip
 
 - 使用说明书：[docs/manuals/point-shortage-alert-user-manual.md](docs/manuals/point-shortage-alert-user-manual.md)
 - 版本策略：[docs/VERSIONING.md](docs/VERSIONING.md)
-- 发布说明：[docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)
+- 发布说明：[docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)
 
 ## 版本
 

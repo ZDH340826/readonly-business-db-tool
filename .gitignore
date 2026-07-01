@@ -13,6 +13,11 @@
 # Local configuration
 config.properties
 connections.properties
+group-config.properties
+*.local.properties
+*.secret.properties
+.env
+.env.*
 
 # OS/editor files
 .DS_Store
