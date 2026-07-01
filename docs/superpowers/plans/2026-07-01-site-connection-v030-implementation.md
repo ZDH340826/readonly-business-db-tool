@@ -30,11 +30,11 @@
 - Modify: `test/com/local/monitor/LocalTestDatabaseTest.java`
 - Modify: `test/com/local/monitor/DbMetadataRepositoryTest.java`
 
-- [ ] Write failing tests that the local database exposes `public.tcs_map_data` and seeds five point records.
-- [ ] Change the H2 schema creation and insert/update statements to use `tcs_map_data` with site-compatible columns.
-- [ ] Keep sample point codes only: `USE_POINT_001`, `BACKUP_POINT_001` through `BACKUP_POINT_004`.
-- [ ] Run `.\build.ps1`.
-- [ ] Commit and push.
+- [x] Write failing tests that the local database exposes `public.tcs_map_data` and seeds five point records.
+- [x] Change the H2 schema creation and insert/update statements to use `tcs_map_data` with site-compatible columns.
+- [x] Keep sample point codes only: `USE_POINT_001`, `BACKUP_POINT_001` through `BACKUP_POINT_004`.
+- [x] Run `.\build.ps1`.
+- [x] Commit and push.
 
 ### Task 3: Chinese Connection UI And Defaults
 

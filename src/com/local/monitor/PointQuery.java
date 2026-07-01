@@ -18,7 +18,7 @@ public final class PointQuery {
         }
         return "select map_data_code as point_code, pod_code as shelf_code, pod_status as shelf_status, "
                 + "status, ind_lock as lock_state, area_code, relate_area_code as next_area_code, "
-                + "date_chg as updated_at, date_cr as marked_at "
+                + "date_chg as updated_at, date_chg as marked_at "
                 + "from " + safeSchema + ".tcs_map_data "
                 + "where map_data_code in (" + placeholders + ")";
     }

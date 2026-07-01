@@ -21,6 +21,11 @@ public final class LocalTestDatabaseTest {
         PointRepository repository = new PointRepository();
         List<PointRecord> records = repository.fetch(config, new char[0], pointDefinitions(group));
         TestSupport.assertEquals(5, records.size(), "local test database should seed five point records");
+        PointRecord backup = findRecord(records, "BACKUP_POINT_001");
+        TestSupport.assertEquals("SHELF_BACKUP_001", backup.podCode(), "site table pod_code should map to shelf code");
+        TestSupport.assertEquals(1, backup.status(), "site table status should map");
+        TestSupport.assertEquals(0, backup.indLock(), "site table ind_lock should map");
+        TestSupport.assertTrue(backup.dateChg() != null, "site table date_chg should map to update time");
 
         GroupRuntimeState state = new GroupRuntimeState();
         GroupEvaluation evaluation = null;
@@ -53,6 +58,15 @@ public final class LocalTestDatabaseTest {
             }
         }
         return points;
+    }
+
+    private static PointRecord findRecord(List<PointRecord> records, String code) {
+        for (PointRecord record : records) {
+            if (code.equals(record.mapDataCode())) {
+                return record;
+            }
+        }
+        throw new AssertionError("missing record " + code);
     }
 
     private static final class TestSupport {

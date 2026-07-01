@@ -14,7 +14,7 @@ public final class LocalTestDatabase {
         try (Connection conn = DriverManager.getConnection(config.jdbcUrl(), "sa", "")) {
             createSchema(conn);
             try (Statement st = conn.createStatement()) {
-                st.execute("delete from public.shelf_point_status");
+                st.execute("delete from public.tcs_map_data");
             }
             insertDefaultPoints(conn);
         }
@@ -53,7 +53,7 @@ public final class LocalTestDatabase {
         try (Connection conn = DriverManager.getConnection(config.jdbcUrl(), "sa", "")) {
             createSchema(conn);
             try (Statement st = conn.createStatement()) {
-                var rs = st.executeQuery("select count(*) from public.shelf_point_status");
+                var rs = st.executeQuery("select count(*) from public.tcs_map_data");
                 rs.next();
                 if (rs.getInt(1) == 0) {
                     insertDefaultPoints(conn);
@@ -65,16 +65,15 @@ public final class LocalTestDatabase {
     private static void createSchema(Connection conn) throws Exception {
         try (Statement st = conn.createStatement()) {
             st.execute("create schema if not exists public");
-            st.execute("create table if not exists public.shelf_point_status ("
-                    + "point_code varchar(64) primary key,"
-                    + "shelf_code varchar(64),"
-                    + "shelf_status varchar(16),"
+            st.execute("create table if not exists public.tcs_map_data ("
+                    + "map_data_code varchar(64) primary key,"
+                    + "pod_code varchar(64),"
+                    + "pod_status varchar(16),"
                     + "status integer,"
-                    + "lock_state integer,"
+                    + "ind_lock integer,"
                     + "area_code varchar(64),"
-                    + "next_area_code varchar(64),"
-                    + "updated_at timestamp,"
-                    + "marked_at timestamp)");
+                    + "relate_area_code varchar(64),"
+                    + "date_chg timestamp)");
         }
     }
 
@@ -88,9 +87,9 @@ public final class LocalTestDatabase {
 
     private static void insertPoint(Connection conn, String code, String podCode, int status, int indLock,
             String areaCode, String relateAreaCode) throws Exception {
-        try (PreparedStatement ps = conn.prepareStatement("insert into public.shelf_point_status "
-                + "(point_code,shelf_code,shelf_status,status,lock_state,area_code,next_area_code,updated_at,marked_at) "
-                + "values (?,?,?,?,?,?,?,current_timestamp,current_timestamp)")) {
+        try (PreparedStatement ps = conn.prepareStatement("insert into public.tcs_map_data "
+                + "(map_data_code,pod_code,pod_status,status,ind_lock,area_code,relate_area_code,date_chg) "
+                + "values (?,?,?,?,?,?,?,current_timestamp)")) {
             ps.setString(1, code);
             ps.setString(2, podCode);
             ps.setString(3, "0");
@@ -104,7 +103,7 @@ public final class LocalTestDatabase {
 
     private static void updatePod(Connection conn, String code, String podCode) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
-                "update public.shelf_point_status set shelf_code=?, updated_at=current_timestamp where point_code=?")) {
+                "update public.tcs_map_data set pod_code=?, date_chg=current_timestamp where map_data_code=?")) {
             ps.setString(1, podCode);
             ps.setString(2, code);
             ps.executeUpdate();
@@ -117,5 +116,4 @@ public final class LocalTestDatabase {
         }
     }
 }
-
 

@@ -93,7 +93,7 @@ public final class MonitorLogicTest {
         TestSupport.assertContains(sql, "pod_code as shelf_code", "query maps site shelf code");
         TestSupport.assertContains(sql, "ind_lock as lock_state", "query maps site lock state");
         TestSupport.assertContains(sql, "date_chg as updated_at", "query maps site update time");
-        TestSupport.assertContains(sql, "date_cr as marked_at", "query maps site created time");
+        TestSupport.assertContains(sql, "date_chg as marked_at", "query maps site marked time fallback");
         TestSupport.assertContains(sql, "from public.tcs_map_data", "query targets site point table only");
         TestSupport.assertFalse(sql.toLowerCase().contains("update "), "query must not contain UPDATE");
         TestSupport.assertEquals(2, TestSupport.count(sql, "?"), "query should have one placeholder per point");
