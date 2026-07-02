@@ -2,6 +2,7 @@
 /build/
 /dist/
 /lib/
+/.worktrees/
 
 # Runtime state
 /logs/
