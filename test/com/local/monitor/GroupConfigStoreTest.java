@@ -25,9 +25,9 @@ public final class GroupConfigStoreTest {
         TestSupport.assertEquals(1, loaded.size(), "one group should load");
         PointGroupDefinition group = loaded.get(0);
         TestSupport.assertEquals("group-001", group.id(), "group id should round-trip");
-        TestSupport.assertEquals("区域A", group.areaName(), "area should round-trip");
-        TestSupport.assertEquals("后围板组", group.groupName(), "group name should round-trip");
-        TestSupport.assertEquals("后围板总成", group.materialName(), "material should round-trip");
+        TestSupport.assertEquals("Area A", group.areaName(), "area should round-trip");
+        TestSupport.assertEquals("Rear Panel", group.groupName(), "group name should round-trip");
+        TestSupport.assertEquals("Material A", group.materialName(), "material should round-trip");
         TestSupport.assertEquals(60, group.checkIntervalSeconds(), "check interval should round-trip");
         TestSupport.assertEquals(5, group.points().size(), "points should round-trip");
         TestSupport.assertEquals(PointRole.USE, group.points().get(0).role(), "use point role should load");
@@ -109,17 +109,17 @@ public final class GroupConfigStoreTest {
             boolean backupThresholdParticipates) {
         return new PointGroupDefinition(
                 id,
-                "区域A",
-                "后围板组",
-                "后围板总成",
+                "Area A",
+                "Rear Panel",
+                "Material A",
                 true,
-                PointGroupDefinition.DEFAULT_CHECK_INTERVAL_SECONDS,
+                60,
                 List.of(
-                        new GroupMonitorPoint(id + "-use", "USE_POINT_001", "使用位", PointRole.USE, true, 1),
-                        new GroupMonitorPoint(id + "-backup-1", "BACKUP_POINT_001", "备用位1", PointRole.BACKUP, true, 2),
-                        new GroupMonitorPoint(id + "-backup-2", "BACKUP_POINT_002", "备用位2", PointRole.BACKUP, true, 3),
-                        new GroupMonitorPoint(id + "-backup-3", "BACKUP_POINT_003", "备用位3", PointRole.BACKUP, true, 4),
-                        new GroupMonitorPoint(id + "-backup-4", "BACKUP_POINT_004", "备用位4", PointRole.BACKUP, true, 5)),
+                        new GroupMonitorPoint(id + "-use", "USE_POINT_001", "Use", PointRole.USE, true, 1),
+                        new GroupMonitorPoint(id + "-backup-1", "BACKUP_POINT_001", "Backup 1", PointRole.BACKUP, true, 2),
+                        new GroupMonitorPoint(id + "-backup-2", "BACKUP_POINT_002", "Backup 2", PointRole.BACKUP, true, 3),
+                        new GroupMonitorPoint(id + "-backup-3", "BACKUP_POINT_003", "Backup 3", PointRole.BACKUP, true, 4),
+                        new GroupMonitorPoint(id + "-backup-4", "BACKUP_POINT_004", "Backup 4", PointRole.BACKUP, true, 5)),
                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes, backupThresholdParticipates));
     }
 
