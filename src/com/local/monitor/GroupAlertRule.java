@@ -8,8 +8,18 @@ public final class GroupAlertRule {
     private final boolean requireUsePointEmpty;
     private final int minBackupAvailable;
     private final int durationMinutes;
+    private final boolean backupThresholdParticipates;
 
     public GroupAlertRule(boolean enabled, boolean requireUsePointEmpty, int minBackupAvailable, int durationMinutes) {
+        this(enabled, requireUsePointEmpty, minBackupAvailable, durationMinutes, true);
+    }
+
+    public GroupAlertRule(
+            boolean enabled,
+            boolean requireUsePointEmpty,
+            int minBackupAvailable,
+            int durationMinutes,
+            boolean backupThresholdParticipates) {
         if (minBackupAvailable < 0) {
             throw new IllegalArgumentException("minBackupAvailable must be >= 0");
         }
@@ -20,6 +30,7 @@ public final class GroupAlertRule {
         this.requireUsePointEmpty = requireUsePointEmpty;
         this.minBackupAvailable = minBackupAvailable;
         this.durationMinutes = durationMinutes;
+        this.backupThresholdParticipates = backupThresholdParticipates;
     }
 
     public boolean enabled() {
@@ -36,5 +47,13 @@ public final class GroupAlertRule {
 
     public int durationMinutes() {
         return durationMinutes;
+    }
+
+    public boolean backupThresholdParticipates() {
+        return backupThresholdParticipates;
+    }
+
+    public int durationSeconds() {
+        return durationMinutes * 60;
     }
 }

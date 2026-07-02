@@ -106,7 +106,8 @@ public final class GroupConfigStore {
                 parseBoolean(p.getProperty(prefix + "rule.enabled"), true),
                 parseBoolean(p.getProperty(prefix + "rule.requireUsePointEmpty"), true),
                 parseInt(p.getProperty(prefix + "rule.minBackupAvailable"), 1),
-                parseInt(p.getProperty(prefix + "rule.durationMinutes"), 5));
+                parseInt(p.getProperty(prefix + "rule.durationMinutes"), 5),
+                parseBoolean(p.getProperty(prefix + "rule.backupThresholdParticipates"), true));
 
         return new PointGroupDefinition(
                 p.getProperty(prefix + "id", "group-" + System.nanoTime()),
@@ -141,6 +142,8 @@ public final class GroupConfigStore {
         p.setProperty(prefix + "rule.requireUsePointEmpty", String.valueOf(group.rule().requireUsePointEmpty()));
         p.setProperty(prefix + "rule.minBackupAvailable", String.valueOf(group.rule().minBackupAvailable()));
         p.setProperty(prefix + "rule.durationMinutes", String.valueOf(group.rule().durationMinutes()));
+        p.setProperty(prefix + "rule.backupThresholdParticipates",
+                String.valueOf(group.rule().backupThresholdParticipates()));
         p.setProperty(prefix + "point.count", String.valueOf(group.points().size()));
         for (int i = 0; i < group.points().size(); i++) {
             storePoint(p, prefix + "point." + i + ".", group.points().get(i));
