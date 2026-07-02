@@ -7,6 +7,7 @@ public final class PointStatusMapperTest {
     public static void main(String[] args) {
         mapsAvailablePoint();
         mapsEmptyPointWhenShelfCodeIsBlank();
+        mapsEmptyPointWhenPointStatusIsAbnormal();
         mapsEmptyPointWhenLocked();
         mapsMissingPointWhenRecordIsAbsent();
         mapsDisabledPoint();
@@ -29,6 +30,16 @@ public final class PointStatusMapperTest {
                 List.of(record("USE_POINT_001", "", 1, 0)));
         TestSupport.assertEquals(PointMaterialStatus.EMPTY, views.get(0).status(), "blank shelf should be empty");
         TestSupport.assertEquals("无货架", views.get(0).reason(), "blank shelf reason");
+    }
+
+    private static void mapsEmptyPointWhenPointStatusIsAbnormal() {
+        List<PointStatusView> views = PointStatusMapper.map(
+                List.of(point("backup", "BACKUP_POINT_001", "备用位1", PointRole.BACKUP, true, 2)),
+                List.of(record("BACKUP_POINT_001", "SHELF_BACKUP_001", 2, 0)));
+        PointStatusView view = views.get(0);
+        TestSupport.assertEquals(PointMaterialStatus.EMPTY, view.status(), "abnormal point status should be empty");
+        TestSupport.assertEquals("点位状态异常", view.reason(), "abnormal point status reason");
+        TestSupport.assertEquals("SHELF_BACKUP_001", view.shelfCode(), "abnormal point should keep shelf code");
     }
 
     private static void mapsEmptyPointWhenLocked() {
