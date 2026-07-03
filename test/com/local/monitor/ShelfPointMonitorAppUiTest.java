@@ -4,14 +4,17 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.swing.AbstractButton;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.text.JTextComponent;
 import javax.swing.SwingUtilities;
@@ -21,6 +24,8 @@ public final class ShelfPointMonitorAppUiTest {
         appHasThreeNavigationPages();
         connectionPageUsesChineseOperatorLabels();
         alertPageContainsGroupPointTable();
+        groupCheckIntervalFieldExists();
+        updateSelectedGroupFromFormPreservesCustomInterval();
         gridBagPanelsDoNotOverlapCells();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
@@ -82,6 +87,47 @@ public final class ShelfPointMonitorAppUiTest {
             try {
                 TestSupport.assertTrue(hasGroupPointTable(app.getContentPane()),
                         "alert page should contain the group point table");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void groupCheckIntervalFieldExists() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("检测周期(分钟)："),
+                        "alert page should show group check interval label");
+                JSpinner spinner = fieldValue(app, "groupCheckIntervalMinutesSpinner", JSpinner.class);
+                TestSupport.assertTrue(spinner != null, "group check interval spinner should exist");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void updateSelectedGroupFromFormPreservesCustomInterval() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition source = group("group-001", 300);
+                setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+                invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+                invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+                JSpinner spinner = fieldValue(app, "groupCheckIntervalMinutesSpinner", JSpinner.class);
+                TestSupport.assertEquals(5, spinner.getValue(),
+                        "populate should load group check interval minutes");
+
+                spinner.setValue(10);
+                invoke(app, "updateSelectedGroupFromForm", new Class<?>[0]);
+
+                List<?> updatedGroups = fieldValue(app, "pointGroups", List.class);
+                PointGroupDefinition updated = (PointGroupDefinition) updatedGroups.get(0);
+                TestSupport.assertEquals(600, updated.checkIntervalSeconds(),
+                        "group check interval should be saved from spinner minutes");
             } finally {
                 app.dispose();
             }
@@ -205,6 +251,50 @@ public final class ShelfPointMonitorAppUiTest {
                 5,
                 false,
                 message);
+    }
+
+    private static PointGroupDefinition group(String id, int checkIntervalSeconds) {
+        return new PointGroupDefinition(
+                id,
+                "Area A",
+                "Rear Panel",
+                "Material A",
+                true,
+                checkIntervalSeconds,
+                List.of(
+                        new GroupMonitorPoint(id + "-use", "USE_POINT_001", "Use", PointRole.USE, true, 1),
+                        new GroupMonitorPoint(id + "-backup", "BACKUP_POINT_001", "Backup", PointRole.BACKUP, true, 2)),
+                new GroupAlertRule(true, true, 1, 5));
+    }
+
+    private static void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static <T> T fieldValue(Object target, String name, Class<T> type) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        return type.cast(field.get(target));
+    }
+
+    private static Object invoke(Object target, String name, Class<?>[] parameterTypes, Object... args)
+            throws Exception {
+        Method method = target.getClass().getDeclaredMethod(name, parameterTypes);
+        method.setAccessible(true);
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            throw ex;
+        }
     }
 
     private static void assertNoTechnicalGroupText(String text, String context) {

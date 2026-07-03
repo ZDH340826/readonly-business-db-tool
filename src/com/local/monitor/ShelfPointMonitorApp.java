@@ -129,6 +129,7 @@ public final class ShelfPointMonitorApp extends JFrame {
     private final JCheckBox requireUseEmptyBox = new JCheckBox("使用位无货架", true);
     private final JSpinner minBackupAvailableSpinner = new JSpinner(new SpinnerNumberModel(3, 0, 999, 1));
     private final JSpinner durationMinutesSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 1440, 1));
+    private final JSpinner groupCheckIntervalMinutesSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1440, 1));
     private final DefaultTableModel groupPointModel = new DefaultTableModel(
             new Object[] {"角色", "别名", "点位编码", "启用"}, 0) {
         @Override
@@ -376,6 +377,8 @@ public final class ShelfPointMonitorApp extends JFrame {
         addField(form, row, 0, "最少备用位有料", minBackupAvailableSpinner);
         addField(form, row, 2, "持续分钟", durationMinutesSpinner);
         addCheckBox(form, row, 4, requireUseEmptyBox);
+        row++;
+        addField(form, row, 0, "检测周期(分钟)", groupCheckIntervalMinutesSpinner);
         return form;
     }
 
@@ -761,6 +764,7 @@ public final class ShelfPointMonitorApp extends JFrame {
         requireUseEmptyBox.setSelected(group.rule().requireUsePointEmpty());
         minBackupAvailableSpinner.setValue(group.rule().minBackupAvailable());
         durationMinutesSpinner.setValue(group.rule().durationMinutes());
+        groupCheckIntervalMinutesSpinner.setValue(Math.max(1, group.checkIntervalSeconds() / 60));
         groupPointModel.setRowCount(0);
         for (GroupMonitorPoint point : group.points()) {
             groupPointModel.addRow(new Object[] {
@@ -839,7 +843,7 @@ public final class ShelfPointMonitorApp extends JFrame {
                 groupNameField.getText(),
                 groupMaterialField.getText(),
                 groupEnabledBox.isSelected(),
-                PointGroupDefinition.DEFAULT_CHECK_INTERVAL_SECONDS,
+                ((Integer) groupCheckIntervalMinutesSpinner.getValue()) * 60,
                 readGroupPoints(),
                 new GroupAlertRule(
                         ruleEnabledBox.isSelected(),
@@ -909,8 +913,13 @@ public final class ShelfPointMonitorApp extends JFrame {
 
     private void checkDueGroups() throws Exception {
         DbConfig config = requireCurrentConfig(60);
-        List<PointGroupDefinition> groups = readGroups();
-        checkGroups(config, groups, LocalDateTime.now(), "自动检测");
+        List<PointGroupDefinition> allGroups = readGroups();
+        LocalDateTime now = LocalDateTime.now();
+        List<PointGroupDefinition> dueGroups = GroupCheckPlanner.dueGroups(allGroups, groupStates, now);
+        if (dueGroups.isEmpty()) {
+            return;
+        }
+        checkGroups(config, dueGroups, now, "自动检测");
     }
 
     private void checkGroups(
@@ -923,7 +932,7 @@ public final class ShelfPointMonitorApp extends JFrame {
         for (PointGroupDefinition group : groups) {
             List<PointRecord> records = pointRepository.fetch(config, currentPassword, pointDefinitions(group));
             GroupRuntimeState state = groupStates.computeIfAbsent(group.id(), key -> new GroupRuntimeState());
-            GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, records, state);
+            GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, records, state, now);
             appendCheckLog(now, evaluation);
             appendGroupEvents(now, evaluation);
             runtime.append(formatGroupCheckResult(source, records, evaluation)).append(System.lineSeparator());
@@ -1008,11 +1017,11 @@ public final class ShelfPointMonitorApp extends JFrame {
             scheduledTask = executor.scheduleWithFixedDelay(
                     () -> runWithUiErrorHandling(this::checkDueGroups),
                     0,
-                    60,
+                    10,
                     TimeUnit.SECONDS);
             startButton.setEnabled(false);
             stopButton.setEnabled(true);
-            appendStatus("已开始点位组监控。检测间隔 60 秒。");
+            appendStatus("已开始点位组监控。系统每 10 秒扫描到期点位组，各组按自身检测周期查询数据库。");
         } catch (Exception ex) {
             showError(ex);
         }

@@ -64,6 +64,8 @@ if ($LASTEXITCODE -ne 0) { throw "javac test failed with exit code $LASTEXITCODE
 if ($LASTEXITCODE -ne 0) { throw "tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupMonitorLogicTest
 if ($LASTEXITCODE -ne 0) { throw "group logic tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupCheckPlannerTest
+if ($LASTEXITCODE -ne 0) { throw "group check planner tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PointStatusMapperTest
 if ($LASTEXITCODE -ne 0) { throw "point status mapper tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.LocalTestDatabaseTest
