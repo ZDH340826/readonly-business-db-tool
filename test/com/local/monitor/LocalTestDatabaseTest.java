@@ -2,6 +2,7 @@ package com.local.monitor;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,17 +29,24 @@ public final class LocalTestDatabaseTest {
         TestSupport.assertTrue(backup.dateChg() != null, "site table date_chg should map to update time");
 
         GroupRuntimeState state = new GroupRuntimeState();
-        GroupEvaluation evaluation = null;
-        for (int i = 0; i < group.rule().durationMinutes(); i++) {
-            evaluation = GroupMonitorLogic.evaluate(group, records, state);
-        }
+        LocalDateTime start = LocalDateTime.of(2026, 7, 3, 9, 0);
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, records, state, start);
+        evaluation = GroupMonitorLogic.evaluate(
+                group,
+                records,
+                state,
+                start.plusMinutes(group.rule().durationMinutes()));
         TestSupport.assertEquals(GroupAlertStatus.ACTIVE_ALERT, evaluation.status(),
                 "seed data should make default group alert after duration");
         TestSupport.assertTrue(evaluation.shouldShowDialog(), "first active group alert should request dialog");
 
         LocalTestDatabase.setScenario(config, "normal");
         records = repository.fetch(config, new char[0], pointDefinitions(group));
-        evaluation = GroupMonitorLogic.evaluate(group, records, state);
+        evaluation = GroupMonitorLogic.evaluate(
+                group,
+                records,
+                state,
+                start.plusMinutes(group.rule().durationMinutes() + 1));
         TestSupport.assertEquals(GroupAlertStatus.NORMAL, evaluation.status(), "normal local scenario should recover");
     }
 

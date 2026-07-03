@@ -44,6 +44,7 @@ public final class GroupRuntimeState {
             conditionFirstMatchedAt = matchedAt;
         }
         conditionLastMatchedAt = matchedAt;
+        lastCheckedAt = matchedAt;
     }
 
     public int continuousMatchedSeconds(LocalDateTime now) {

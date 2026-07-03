@@ -1,6 +1,5 @@
 package com.local.monitor;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -12,15 +11,7 @@ public final class GroupMonitorLogic {
             PointGroupDefinition group,
             List<PointRecord> records,
             GroupRuntimeState state) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime evaluationTime = legacyEvaluationTime(group, state, now);
-        if (group != null
-                && state != null
-                && state.lastCheckedAt() == null
-                && state.conditionFirstMatchedAt() == null) {
-            state.markMatched(evaluationTime.minusSeconds(group.checkIntervalSeconds()));
-        }
-        return evaluate(group, records, state, evaluationTime);
+        return evaluate(group, records, state, LocalDateTime.now());
     }
 
     public static GroupEvaluation evaluate(
@@ -123,21 +114,4 @@ public final class GroupMonitorLogic {
                 && record.indLock() == 0;
     }
 
-    private static LocalDateTime legacyEvaluationTime(
-            PointGroupDefinition group,
-            GroupRuntimeState state,
-            LocalDateTime now) {
-        if (group == null || state == null) {
-            return now;
-        }
-        LocalDateTime lastCheckedAt = state.lastCheckedAt();
-        if (lastCheckedAt == null || state.conditionFirstMatchedAt() == null) {
-            return now;
-        }
-        long elapsedSinceLastCheck = Duration.between(lastCheckedAt, now).getSeconds();
-        if (elapsedSinceLastCheck >= group.checkIntervalSeconds()) {
-            return now;
-        }
-        return lastCheckedAt.plusSeconds(group.checkIntervalSeconds());
-    }
 }
