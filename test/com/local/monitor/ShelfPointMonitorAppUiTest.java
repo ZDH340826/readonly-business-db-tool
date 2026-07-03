@@ -7,11 +7,21 @@ import java.awt.GridBagLayout;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import javax.swing.AbstractButton;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JSpinner;
@@ -28,6 +38,8 @@ public final class ShelfPointMonitorAppUiTest {
         updateSelectedGroupFromFormPreservesCustomInterval();
         populateSelectedGroupRoundsPartialMinutesUp();
         capturedMonitoredGroupsIgnoreLaterFormChanges();
+        manualCheckUsesGroupSnapshotCapturedOnEdt();
+        groupFetchFailureMarksCheckedAndContinues();
         gridBagPanelsDoNotOverlapCells();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
@@ -187,6 +199,103 @@ public final class ShelfPointMonitorAppUiTest {
         });
     }
 
+    private static void manualCheckUsesGroupSnapshotCapturedOnEdt() throws Exception {
+        CapturingScheduledExecutor executor = new CapturingScheduledExecutor();
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        Path localDb = Files.createTempDirectory("manual-check-db").resolve("local-test-db");
+
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            appRef[0] = app;
+            PointGroupDefinition source = group("group-001", 600);
+            setField(app, "executor", executor);
+            setField(app, "currentProfile", new ConnectionProfile(
+                    "local",
+                    "Local",
+                    "h2",
+                    "local",
+                    1,
+                    "local-test",
+                    "public",
+                    "sa",
+                    "disable",
+                    localDb.toString()));
+            setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+            invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+            invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+            JSpinner spinner = fieldValue(app, "groupCheckIntervalMinutesSpinner", JSpinner.class);
+            TestSupport.assertEquals(10, spinner.getValue(), "test setup should start with ten minute group interval");
+            JButton checkButton = fieldValue(app, "checkButton", JButton.class);
+            checkButton.doClick();
+            TestSupport.assertEquals(1, executor.capturedCount(), "manual check should schedule one background job");
+
+            spinner.setValue(1);
+        });
+
+        try {
+            executor.runCapturedOnWorker();
+            runOnEdtAndWait(() -> {
+                @SuppressWarnings("unchecked")
+                List<PointGroupDefinition> currentGroups =
+                        (List<PointGroupDefinition>) fieldValue(appRef[0], "pointGroups", List.class);
+                TestSupport.assertEquals(600, currentGroups.get(0).checkIntervalSeconds(),
+                        "manual background check must use the pre-click group snapshot, not later Swing form edits");
+            });
+        } finally {
+            executor.shutdownNow();
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void groupFetchFailureMarksCheckedAndContinues() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        runOnEdtAndWait(() -> appRef[0] = new ShelfPointMonitorApp());
+        try {
+            ShelfPointMonitorApp app = appRef[0];
+            LocalDateTime now = LocalDateTime.of(2026, 7, 3, 10, 15);
+            PointGroupDefinition failingGroup = group("group-fail", 60);
+            PointGroupDefinition healthyGroup = group("group-ok", 60);
+
+            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
+                    List.of(failingGroup, healthyGroup),
+                    now,
+                    "test",
+                    group -> {
+                        if (group.id().equals(failingGroup.id())) {
+                            throw new IllegalStateException("fetch failed");
+                        }
+                        return healthyRecords();
+                    });
+
+            @SuppressWarnings("unchecked")
+            Map<String, GroupRuntimeState> states =
+                    (Map<String, GroupRuntimeState>) fieldValue(app, "groupStates", Map.class);
+            TestSupport.assertEquals(now, states.get(failingGroup.id()).lastCheckedAt(),
+                    "failed group should be marked checked to avoid immediate retry loops");
+            TestSupport.assertEquals(now, states.get(healthyGroup.id()).lastCheckedAt(),
+                    "successful group should also be marked checked");
+            TestSupport.assertEquals(1, result.checkedGroups(), "successful group should still be processed");
+            TestSupport.assertEquals(1, result.failedGroups(), "failed group should be counted");
+            TestSupport.assertEquals(1, result.evaluations().size(),
+                    "failed fetch should not create a group evaluation");
+            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(0).groupId(),
+                    "only the successful group should be evaluated");
+            TestSupport.assertFalse(result.dialogRequested(), "failed fetch should not request a dialog");
+
+            @SuppressWarnings("unchecked")
+            Map<String, GroupAlertStatus> statuses =
+                    (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+            TestSupport.assertFalse(statuses.containsKey(failingGroup.id()),
+                    "failed group should not update last alert status without an evaluation");
+            TestSupport.assertEquals(GroupAlertStatus.NORMAL, statuses.get(healthyGroup.id()),
+                    "successful healthy group should update its last status");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
     private static void groupAlertTextsDoNotExposeTechnicalStatusNames() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
@@ -320,6 +429,25 @@ public final class ShelfPointMonitorAppUiTest {
                 new GroupAlertRule(true, true, 1, 5));
     }
 
+    private static List<PointRecord> healthyRecords() {
+        return List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0));
+    }
+
+    private static PointRecord record(String code, String shelfCode, int status, int lock) {
+        return new PointRecord(
+                code,
+                shelfCode,
+                "0",
+                status,
+                lock,
+                "AREA_A",
+                "AREA_BUFFER",
+                LocalDateTime.of(2026, 7, 3, 10, 0),
+                LocalDateTime.of(2026, 7, 3, 9, 59));
+    }
+
     private static void setField(Object target, String name, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
@@ -348,6 +476,11 @@ public final class ShelfPointMonitorAppUiTest {
             }
             throw ex;
         }
+    }
+
+    private static void shutdownExecutor(Object target) throws Exception {
+        ScheduledExecutorService executor = fieldValue(target, "executor", ScheduledExecutorService.class);
+        executor.shutdownNow();
     }
 
     private static void assertNoTechnicalGroupText(String text, String context) {
@@ -404,6 +537,98 @@ public final class ShelfPointMonitorAppUiTest {
         void run() throws Exception;
     }
 
+    private static final class CapturingScheduledExecutor extends AbstractExecutorService
+            implements ScheduledExecutorService {
+        private final List<Runnable> commands = new ArrayList<>();
+        private boolean shutdown;
+
+        @Override
+        public void execute(Runnable command) {
+            commands.add(command);
+        }
+
+        int capturedCount() {
+            return commands.size();
+        }
+
+        void runCapturedOnWorker() throws Exception {
+            TestSupport.assertEquals(1, commands.size(), "expected one captured command");
+            Throwable[] failure = new Throwable[1];
+            Thread worker = new Thread(() -> {
+                try {
+                    commands.get(0).run();
+                } catch (Throwable ex) {
+                    failure[0] = ex;
+                }
+            }, "manual-check-worker");
+            worker.start();
+            worker.join(5000);
+            TestSupport.assertFalse(worker.isAlive(), "captured command should finish");
+            if (failure[0] instanceof Exception) {
+                throw (Exception) failure[0];
+            }
+            if (failure[0] instanceof Error) {
+                throw (Error) failure[0];
+            }
+        }
+
+        @Override
+        public void shutdown() {
+            shutdown = true;
+        }
+
+        @Override
+        public List<Runnable> shutdownNow() {
+            shutdown = true;
+            List<Runnable> copy = new ArrayList<>(commands);
+            commands.clear();
+            return copy;
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) {
+            return shutdown;
+        }
+
+        @Override
+        public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(
+                Runnable command,
+                long initialDelay,
+                long period,
+                TimeUnit unit) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(
+                Runnable command,
+                long initialDelay,
+                long delay,
+                TimeUnit unit) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
     private static final class TestSupport {
         static void assertTrue(boolean condition, String message) {
             if (!condition) {
@@ -415,6 +640,10 @@ public final class ShelfPointMonitorAppUiTest {
             if (!java.util.Objects.equals(expected, actual)) {
                 throw new AssertionError(message + " expected=" + expected + " actual=" + actual);
             }
+        }
+
+        static void assertFalse(boolean condition, String message) {
+            assertTrue(!condition, message);
         }
 
         static void assertContains(String text, String expected, String message) {

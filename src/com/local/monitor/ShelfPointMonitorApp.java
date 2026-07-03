@@ -360,7 +360,7 @@ public final class ShelfPointMonitorApp extends JFrame {
         saveButton.addActionListener(e -> saveGroupConfig());
         startButton.addActionListener(e -> startMonitoring());
         stopButton.addActionListener(e -> stopMonitoring());
-        checkButton.addActionListener(e -> runOnceInBackground(this::checkNow));
+        checkButton.addActionListener(e -> checkNow());
         stopButton.setEnabled(false);
         return page;
     }
@@ -429,7 +429,7 @@ public final class ShelfPointMonitorApp extends JFrame {
         saveButton.addActionListener(e -> savePointConfig());
         startButton.addActionListener(e -> startMonitoring());
         stopButton.addActionListener(e -> stopMonitoring());
-        checkButton.addActionListener(e -> runOnceInBackground(this::checkNow));
+        checkButton.addActionListener(e -> checkNow());
         stopButton.setEnabled(false);
         return page;
     }
@@ -921,11 +921,22 @@ public final class ShelfPointMonitorApp extends JFrame {
         }
     }
 
-    private void checkNow() throws Exception {
-        DbConfig config = requireCurrentConfig(60);
-        List<PointGroupDefinition> groups = readGroups();
-        groupConfigStore.save(groups);
-        checkGroups(config, groups, LocalDateTime.now(), "手动检测");
+    private void checkNow() {
+        try {
+            DbConfig config = requireCurrentConfig(60);
+            char[] passwordSnapshot = Arrays.copyOf(currentPassword, currentPassword.length);
+            List<PointGroupDefinition> groups = List.copyOf(readGroups());
+            groupConfigStore.save(groups);
+            runOnceInBackground(() -> checkGroups(
+                    config,
+                    passwordSnapshot,
+                    groups,
+                    LocalDateTime.now(),
+                    "手动检测"));
+        } catch (Exception ex) {
+            showError(ex);
+            appendStatus("执行失败：" + ex.getMessage());
+        }
     }
 
     private void checkDueGroups() throws Exception {
@@ -946,11 +957,33 @@ public final class ShelfPointMonitorApp extends JFrame {
             DbConfig config,
             List<PointGroupDefinition> groups,
             LocalDateTime now,
-            String source) throws Exception {
+            String source) {
+        checkGroups(config, currentPassword, groups, now, source);
+    }
+
+    private void checkGroups(
+            DbConfig config,
+            char[] password,
+            List<PointGroupDefinition> groups,
+            LocalDateTime now,
+            String source) {
+        checkGroupsWithFetcher(
+                groups,
+                now,
+                source,
+                group -> pointRepository.fetch(config, password, pointDefinitions(group)));
+    }
+
+    GroupCheckRunResult checkGroupsWithFetcher(
+            List<PointGroupDefinition> groups,
+            LocalDateTime now,
+            String source,
+            GroupPointFetcher fetcher) {
         StringBuilder runtime = new StringBuilder();
         boolean dialogRequested = false;
         int checkedGroups = 0;
         int failedGroups = 0;
+        List<GroupEvaluation> evaluations = new ArrayList<>();
         for (PointGroupDefinition group : groups) {
             GroupRuntimeState state;
             synchronized (groupMonitorLock) {
@@ -959,7 +992,7 @@ public final class ShelfPointMonitorApp extends JFrame {
             }
             List<PointRecord> records;
             try {
-                records = pointRepository.fetch(config, currentPassword, pointDefinitions(group));
+                records = fetcher.fetch(group);
             } catch (Exception ex) {
                 failedGroups++;
                 appendStatus(source + "失败，点位组 " + group.id() + " 数据库查询失败：" + ex.getMessage());
@@ -971,6 +1004,7 @@ public final class ShelfPointMonitorApp extends JFrame {
             }
             appendCheckLog(now, evaluation);
             appendGroupEvents(now, evaluation);
+            evaluations.add(evaluation);
             runtime.append(formatGroupCheckResult(source, records, evaluation)).append(System.lineSeparator());
             checkedGroups++;
             if (evaluation.shouldShowDialog() && !dialogRequested) {
@@ -982,6 +1016,7 @@ public final class ShelfPointMonitorApp extends JFrame {
         SwingUtilities.invokeLater(() -> groupRuntimeArea.setText(runtimeText));
         appendStatus(source + "完成，点位组 " + checkedGroups + " 个"
                 + (failedGroups > 0 ? "，失败 " + failedGroups + " 个" : "") + "。");
+        return new GroupCheckRunResult(checkedGroups, failedGroups, dialogRequested, evaluations);
     }
 
     private List<PointDefinition> pointDefinitions(PointGroupDefinition group) {
@@ -1430,6 +1465,45 @@ public final class ShelfPointMonitorApp extends JFrame {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignored) {
+        }
+    }
+
+    @FunctionalInterface
+    interface GroupPointFetcher {
+        List<PointRecord> fetch(PointGroupDefinition group) throws Exception;
+    }
+
+    static final class GroupCheckRunResult {
+        private final int checkedGroups;
+        private final int failedGroups;
+        private final boolean dialogRequested;
+        private final List<GroupEvaluation> evaluations;
+
+        GroupCheckRunResult(
+                int checkedGroups,
+                int failedGroups,
+                boolean dialogRequested,
+                List<GroupEvaluation> evaluations) {
+            this.checkedGroups = checkedGroups;
+            this.failedGroups = failedGroups;
+            this.dialogRequested = dialogRequested;
+            this.evaluations = List.copyOf(evaluations);
+        }
+
+        int checkedGroups() {
+            return checkedGroups;
+        }
+
+        int failedGroups() {
+            return failedGroups;
+        }
+
+        boolean dialogRequested() {
+            return dialogRequested;
+        }
+
+        List<GroupEvaluation> evaluations() {
+            return evaluations;
         }
     }
 
