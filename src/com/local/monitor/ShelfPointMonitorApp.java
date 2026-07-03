@@ -142,6 +142,8 @@ public final class ShelfPointMonitorApp extends JFrame {
 
     private List<ConnectionProfile> profiles = new ArrayList<>();
     private List<PointGroupDefinition> pointGroups = new ArrayList<>();
+    private volatile List<PointGroupDefinition> monitoredGroups = List.of();
+    private final Object groupMonitorLock = new Object();
     private final Map<String, GroupRuntimeState> groupStates = new LinkedHashMap<>();
     private final Map<String, GroupAlertStatus> lastGroupStatuses = new LinkedHashMap<>();
     private ConnectionProfile currentProfile;
@@ -764,7 +766,7 @@ public final class ShelfPointMonitorApp extends JFrame {
         requireUseEmptyBox.setSelected(group.rule().requireUsePointEmpty());
         minBackupAvailableSpinner.setValue(group.rule().minBackupAvailable());
         durationMinutesSpinner.setValue(group.rule().durationMinutes());
-        groupCheckIntervalMinutesSpinner.setValue(Math.max(1, group.checkIntervalSeconds() / 60));
+        groupCheckIntervalMinutesSpinner.setValue(Math.max(1, (group.checkIntervalSeconds() + 59) / 60));
         groupPointModel.setRowCount(0);
         for (GroupMonitorPoint point : group.points()) {
             groupPointModel.addRow(new Object[] {
@@ -805,8 +807,10 @@ public final class ShelfPointMonitorApp extends JFrame {
             return;
         }
         PointGroupDefinition removed = pointGroups.remove(index);
-        groupStates.remove(removed.id());
-        lastGroupStatuses.remove(removed.id());
+        synchronized (groupMonitorLock) {
+            groupStates.remove(removed.id());
+            lastGroupStatuses.remove(removed.id());
+        }
         refreshGroupList(pointGroups.isEmpty() ? "" : pointGroups.get(0).id());
         if (pointGroups.isEmpty()) {
             groupPointModel.setRowCount(0);
@@ -829,6 +833,19 @@ public final class ShelfPointMonitorApp extends JFrame {
         }
         GroupConfigStore.validateGroups(pointGroups);
         return new ArrayList<>(pointGroups);
+    }
+
+    List<PointGroupDefinition> captureMonitoredGroupsForTest() {
+        return captureMonitoredGroups(readGroups());
+    }
+
+    List<PointGroupDefinition> monitoredGroupsSnapshotForTest() {
+        return monitoredGroups;
+    }
+
+    private List<PointGroupDefinition> captureMonitoredGroups(List<PointGroupDefinition> groups) {
+        monitoredGroups = List.copyOf(groups);
+        return monitoredGroups;
     }
 
     private void updateSelectedGroupFromForm() {
@@ -913,9 +930,12 @@ public final class ShelfPointMonitorApp extends JFrame {
 
     private void checkDueGroups() throws Exception {
         DbConfig config = requireCurrentConfig(60);
-        List<PointGroupDefinition> allGroups = readGroups();
+        List<PointGroupDefinition> allGroups = monitoredGroups;
         LocalDateTime now = LocalDateTime.now();
-        List<PointGroupDefinition> dueGroups = GroupCheckPlanner.dueGroups(allGroups, groupStates, now);
+        List<PointGroupDefinition> dueGroups;
+        synchronized (groupMonitorLock) {
+            dueGroups = GroupCheckPlanner.dueGroups(allGroups, groupStates, now);
+        }
         if (dueGroups.isEmpty()) {
             return;
         }
@@ -929,13 +949,30 @@ public final class ShelfPointMonitorApp extends JFrame {
             String source) throws Exception {
         StringBuilder runtime = new StringBuilder();
         boolean dialogRequested = false;
+        int checkedGroups = 0;
+        int failedGroups = 0;
         for (PointGroupDefinition group : groups) {
-            List<PointRecord> records = pointRepository.fetch(config, currentPassword, pointDefinitions(group));
-            GroupRuntimeState state = groupStates.computeIfAbsent(group.id(), key -> new GroupRuntimeState());
-            GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, records, state, now);
+            GroupRuntimeState state;
+            synchronized (groupMonitorLock) {
+                state = groupStates.computeIfAbsent(group.id(), key -> new GroupRuntimeState());
+                state.markChecked(now);
+            }
+            List<PointRecord> records;
+            try {
+                records = pointRepository.fetch(config, currentPassword, pointDefinitions(group));
+            } catch (Exception ex) {
+                failedGroups++;
+                appendStatus(source + "失败，点位组 " + group.id() + " 数据库查询失败：" + ex.getMessage());
+                continue;
+            }
+            GroupEvaluation evaluation;
+            synchronized (groupMonitorLock) {
+                evaluation = GroupMonitorLogic.evaluate(group, records, state, now);
+            }
             appendCheckLog(now, evaluation);
             appendGroupEvents(now, evaluation);
             runtime.append(formatGroupCheckResult(source, records, evaluation)).append(System.lineSeparator());
+            checkedGroups++;
             if (evaluation.shouldShowDialog() && !dialogRequested) {
                 showGroupAlertDialog(evaluation);
                 dialogRequested = true;
@@ -943,7 +980,8 @@ public final class ShelfPointMonitorApp extends JFrame {
         }
         String runtimeText = runtime.toString();
         SwingUtilities.invokeLater(() -> groupRuntimeArea.setText(runtimeText));
-        appendStatus(source + "完成，点位组 " + groups.size() + " 个。");
+        appendStatus(source + "完成，点位组 " + checkedGroups + " 个"
+                + (failedGroups > 0 ? "，失败 " + failedGroups + " 个" : "") + "。");
     }
 
     private List<PointDefinition> pointDefinitions(PointGroupDefinition group) {
@@ -965,7 +1003,11 @@ public final class ShelfPointMonitorApp extends JFrame {
     }
 
     private void appendGroupEvents(LocalDateTime now, GroupEvaluation evaluation) {
-        GroupAlertStatus previous = lastGroupStatuses.getOrDefault(evaluation.groupId(), GroupAlertStatus.NORMAL);
+        GroupAlertStatus previous;
+        synchronized (groupMonitorLock) {
+            previous = lastGroupStatuses.getOrDefault(evaluation.groupId(), GroupAlertStatus.NORMAL);
+            lastGroupStatuses.put(evaluation.groupId(), evaluation.status());
+        }
         try {
             if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
                     && previous != GroupAlertStatus.ACTIVE_ALERT
@@ -977,7 +1019,6 @@ public final class ShelfPointMonitorApp extends JFrame {
         } catch (Exception ex) {
             appendStatus("CSV事件日志写入失败：" + ex.getMessage());
         }
-        lastGroupStatuses.put(evaluation.groupId(), evaluation.status());
     }
 
     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
@@ -1012,8 +1053,8 @@ public final class ShelfPointMonitorApp extends JFrame {
             List<PointGroupDefinition> groups = readGroups();
             groupConfigStore.save(groups);
             stopMonitoring();
-            groupStates.clear();
-            lastGroupStatuses.clear();
+            captureMonitoredGroups(groups);
+            clearGroupMonitorState();
             scheduledTask = executor.scheduleWithFixedDelay(
                     () -> runWithUiErrorHandling(this::checkDueGroups),
                     0,
@@ -1032,8 +1073,17 @@ public final class ShelfPointMonitorApp extends JFrame {
             scheduledTask.cancel(false);
             scheduledTask = null;
         }
+        monitoredGroups = List.of();
+        clearGroupMonitorState();
         startButton.setEnabled(true);
         stopButton.setEnabled(false);
+    }
+
+    private void clearGroupMonitorState() {
+        synchronized (groupMonitorLock) {
+            groupStates.clear();
+            lastGroupStatuses.clear();
+        }
     }
 
     private void showGroupAlertDialog(GroupEvaluation evaluation) {
@@ -1057,11 +1107,13 @@ public final class ShelfPointMonitorApp extends JFrame {
 
             JButton ack = new JButton("已关注");
             ack.addActionListener(e -> {
-                GroupRuntimeState state = groupStates.get(evaluation.groupId());
-                if (state != null) {
-                    state.acknowledge();
+                synchronized (groupMonitorLock) {
+                    GroupRuntimeState state = groupStates.get(evaluation.groupId());
+                    if (state != null) {
+                        state.acknowledge();
+                    }
+                    lastGroupStatuses.put(evaluation.groupId(), GroupAlertStatus.ACKED_ALERT);
                 }
-                lastGroupStatuses.put(evaluation.groupId(), GroupAlertStatus.ACKED_ALERT);
                 try {
                     groupLogWriter.appendEvent(LocalDateTime.now(), "ACKNOWLEDGED", evaluation);
                 } catch (Exception ex) {

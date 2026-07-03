@@ -26,6 +26,8 @@ public final class ShelfPointMonitorAppUiTest {
         alertPageContainsGroupPointTable();
         groupCheckIntervalFieldExists();
         updateSelectedGroupFromFormPreservesCustomInterval();
+        populateSelectedGroupRoundsPartialMinutesUp();
+        capturedMonitoredGroupsIgnoreLaterFormChanges();
         gridBagPanelsDoNotOverlapCells();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
@@ -128,6 +130,57 @@ public final class ShelfPointMonitorAppUiTest {
                 PointGroupDefinition updated = (PointGroupDefinition) updatedGroups.get(0);
                 TestSupport.assertEquals(600, updated.checkIntervalSeconds(),
                         "group check interval should be saved from spinner minutes");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void populateSelectedGroupRoundsPartialMinutesUp() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition source = group("group-001", 90);
+                setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+                invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+                invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+                JSpinner spinner = fieldValue(app, "groupCheckIntervalMinutesSpinner", JSpinner.class);
+                TestSupport.assertEquals(2, spinner.getValue(),
+                        "populate should round partial minute intervals up");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void capturedMonitoredGroupsIgnoreLaterFormChanges() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition source = group("group-001", 600);
+                setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+                invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+                invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+                JSpinner spinner = fieldValue(app, "groupCheckIntervalMinutesSpinner", JSpinner.class);
+                TestSupport.assertEquals(10, spinner.getValue(),
+                        "test setup should start from a ten minute interval");
+                invoke(app, "captureMonitoredGroupsForTest", new Class<?>[0]);
+
+                spinner.setValue(1);
+                invoke(app, "updateSelectedGroupFromForm", new Class<?>[0]);
+
+                @SuppressWarnings("unchecked")
+                List<PointGroupDefinition> monitoredGroups =
+                        (List<PointGroupDefinition>) invoke(app, "monitoredGroupsSnapshotForTest", new Class<?>[0]);
+                TestSupport.assertEquals(600, monitoredGroups.get(0).checkIntervalSeconds(),
+                        "monitoring should keep the captured interval snapshot");
+
+                List<?> currentGroups = fieldValue(app, "pointGroups", List.class);
+                PointGroupDefinition current = (PointGroupDefinition) currentGroups.get(0);
+                TestSupport.assertEquals(60, current.checkIntervalSeconds(),
+                        "test setup should mutate the form-backed group after capture");
             } finally {
                 app.dispose();
             }
