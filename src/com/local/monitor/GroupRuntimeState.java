@@ -1,12 +1,29 @@
 package com.local.monitor;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+
 public final class GroupRuntimeState {
-    private int continuousMatchedMinutes;
+    private LocalDateTime lastCheckedAt;
+    private LocalDateTime conditionFirstMatchedAt;
+    private LocalDateTime conditionLastMatchedAt;
     private boolean acknowledged;
     private boolean activeDialogShown;
 
-    public int continuousMatchedMinutes() {
-        return continuousMatchedMinutes;
+    public LocalDateTime lastCheckedAt() {
+        return lastCheckedAt;
+    }
+
+    public void markChecked(LocalDateTime checkedAt) {
+        lastCheckedAt = checkedAt;
+    }
+
+    public LocalDateTime conditionFirstMatchedAt() {
+        return conditionFirstMatchedAt;
+    }
+
+    public LocalDateTime conditionLastMatchedAt() {
+        return conditionLastMatchedAt;
     }
 
     public boolean isAcknowledged() {
@@ -22,8 +39,37 @@ public final class GroupRuntimeState {
         activeDialogShown = true;
     }
 
-    void markMatched() {
-        continuousMatchedMinutes++;
+    void markMatched(LocalDateTime matchedAt) {
+        if (conditionFirstMatchedAt == null) {
+            conditionFirstMatchedAt = matchedAt;
+        }
+        conditionLastMatchedAt = matchedAt;
+    }
+
+    public int continuousMatchedSeconds(LocalDateTime now) {
+        if (conditionFirstMatchedAt == null || now == null) {
+            return 0;
+        }
+        long seconds = Duration.between(conditionFirstMatchedAt, now).getSeconds();
+        if (seconds <= 0L) {
+            return 0;
+        }
+        if (seconds > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) seconds;
+    }
+
+    public int continuousMatchedMinutes(LocalDateTime now) {
+        int seconds = continuousMatchedSeconds(now);
+        if (seconds == 0) {
+            return 0;
+        }
+        return (seconds + 59) / 60;
+    }
+
+    public int continuousMatchedMinutes() {
+        return continuousMatchedMinutes(conditionLastMatchedAt);
     }
 
     void markActiveDialogShown() {
@@ -31,7 +77,8 @@ public final class GroupRuntimeState {
     }
 
     void reset() {
-        continuousMatchedMinutes = 0;
+        conditionFirstMatchedAt = null;
+        conditionLastMatchedAt = null;
         acknowledged = false;
         activeDialogShown = false;
     }

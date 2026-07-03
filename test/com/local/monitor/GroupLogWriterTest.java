@@ -60,7 +60,9 @@ public final class GroupLogWriterTest {
                 2,
                 2,
                 status != GroupAlertStatus.NORMAL,
-                status == GroupAlertStatus.NORMAL ? 0 : 5,
+                status == GroupAlertStatus.NORMAL ? 0 : 300,
+                300,
+                List.of(),
                 status == GroupAlertStatus.ACTIVE_ALERT,
                 "usePoint=USE_POINT_001, backupAvailable=2/4");
     }

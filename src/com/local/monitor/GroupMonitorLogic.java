@@ -1,8 +1,8 @@
 package com.local.monitor;
 
-import java.util.LinkedHashMap;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 public final class GroupMonitorLogic {
     private GroupMonitorLogic() {
@@ -12,31 +12,48 @@ public final class GroupMonitorLogic {
             PointGroupDefinition group,
             List<PointRecord> records,
             GroupRuntimeState state) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime evaluationTime = legacyEvaluationTime(group, state, now);
+        if (group != null
+                && state != null
+                && state.lastCheckedAt() == null
+                && state.conditionFirstMatchedAt() == null) {
+            state.markMatched(evaluationTime.minusSeconds(group.checkIntervalSeconds()));
+        }
+        return evaluate(group, records, state, evaluationTime);
+    }
+
+    public static GroupEvaluation evaluate(
+            PointGroupDefinition group,
+            List<PointRecord> records,
+            GroupRuntimeState state,
+            LocalDateTime now) {
         if (group == null) {
             throw new IllegalArgumentException("group is required");
         }
         if (state == null) {
             throw new IllegalArgumentException("runtime state is required");
         }
+        if (now == null) {
+            throw new IllegalArgumentException("now is required");
+        }
 
-        Map<String, PointRecord> byCode = byCode(records);
-        GroupMonitorPoint usePoint = null;
-        boolean usePointEmpty = true;
+        List<PointStatusView> pointStatuses = PointStatusMapper.map(group.points(), records);
+        boolean usePointEmpty = false;
         int backupTotal = 0;
         int backupAvailable = 0;
 
-        for (GroupMonitorPoint point : group.points()) {
+        for (PointStatusView point : pointStatuses) {
             if (!point.enabled()) {
                 continue;
             }
-            PointRecord record = byCode.get(point.code());
-            boolean available = isAvailable(record);
             if (point.role() == PointRole.USE) {
-                usePoint = point;
-                usePointEmpty = !available;
+                if (!point.available()) {
+                    usePointEmpty = true;
+                }
             } else if (point.role() == PointRole.BACKUP) {
                 backupTotal++;
-                if (available) {
+                if (point.available()) {
                     backupAvailable++;
                 }
             }
@@ -44,17 +61,22 @@ public final class GroupMonitorLogic {
 
         GroupAlertRule rule = group.rule();
         boolean useCondition = !rule.requireUsePointEmpty() || usePointEmpty;
-        boolean backupCondition = backupAvailable < rule.minBackupAvailable();
+        boolean backupCondition = !rule.backupThresholdParticipates()
+                || backupAvailable < rule.minBackupAvailable();
         boolean ruleMatched = group.enabled() && rule.enabled() && useCondition && backupCondition;
 
         GroupAlertStatus status;
         boolean shouldShowDialog = false;
+        int continuousSeconds = 0;
         if (!ruleMatched) {
             state.reset();
+            state.markChecked(now);
             status = GroupAlertStatus.NORMAL;
         } else {
-            state.markMatched();
-            if (state.continuousMatchedMinutes() < rule.durationMinutes()) {
+            state.markMatched(now);
+            continuousSeconds = state.continuousMatchedSeconds(now);
+            state.markChecked(now);
+            if (continuousSeconds < rule.durationSeconds()) {
                 status = GroupAlertStatus.PENDING_ALERT;
             } else if (state.isAcknowledged()) {
                 status = GroupAlertStatus.ACKED_ALERT;
@@ -67,6 +89,7 @@ public final class GroupMonitorLogic {
             }
         }
 
+        int backupMissing = backupTotal - backupAvailable;
         return new GroupEvaluation(
                 group.id(),
                 group.areaName(),
@@ -76,11 +99,21 @@ public final class GroupMonitorLogic {
                 usePointEmpty,
                 backupTotal,
                 backupAvailable,
-                backupTotal - backupAvailable,
+                backupMissing,
                 ruleMatched,
-                state.continuousMatchedMinutes(),
+                continuousSeconds,
+                rule.durationSeconds(),
+                pointStatuses,
                 shouldShowDialog,
-                message(group, usePoint, usePointEmpty, backupTotal, backupAvailable, rule));
+                GroupStatusText.summary(
+                        group,
+                        status,
+                        usePointEmpty,
+                        backupTotal,
+                        backupAvailable,
+                        continuousSeconds,
+                        rule.durationSeconds(),
+                        pointStatuses));
     }
 
     static boolean isAvailable(PointRecord record) {
@@ -90,32 +123,21 @@ public final class GroupMonitorLogic {
                 && record.indLock() == 0;
     }
 
-    private static Map<String, PointRecord> byCode(List<PointRecord> records) {
-        Map<String, PointRecord> byCode = new LinkedHashMap<>();
-        if (records == null) {
-            return byCode;
-        }
-        for (PointRecord record : records) {
-            byCode.put(record.mapDataCode(), record);
-        }
-        return byCode;
-    }
-
-    private static String message(
+    private static LocalDateTime legacyEvaluationTime(
             PointGroupDefinition group,
-            GroupMonitorPoint usePoint,
-            boolean usePointEmpty,
-            int backupTotal,
-            int backupAvailable,
-            GroupAlertRule rule) {
-        String useCode = usePoint == null ? "UNKNOWN_USE_POINT" : usePoint.code();
-        return "area=" + group.areaName()
-                + ", group=" + group.groupName()
-                + ", material=" + group.materialName()
-                + ", usePoint=" + useCode
-                + ", usePointEmpty=" + usePointEmpty
-                + ", backupAvailable=" + backupAvailable + "/" + backupTotal
-                + ", minBackupAvailable=" + rule.minBackupAvailable()
-                + ", durationMinutes=" + rule.durationMinutes();
+            GroupRuntimeState state,
+            LocalDateTime now) {
+        if (group == null || state == null) {
+            return now;
+        }
+        LocalDateTime lastCheckedAt = state.lastCheckedAt();
+        if (lastCheckedAt == null || state.conditionFirstMatchedAt() == null) {
+            return now;
+        }
+        long elapsedSinceLastCheck = Duration.between(lastCheckedAt, now).getSeconds();
+        if (elapsedSinceLastCheck >= group.checkIntervalSeconds()) {
+            return now;
+        }
+        return lastCheckedAt.plusSeconds(group.checkIntervalSeconds());
     }
 }

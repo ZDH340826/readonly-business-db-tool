@@ -1,5 +1,7 @@
 package com.local.monitor;
 
+import java.util.List;
+
 public final class GroupEvaluation {
     private final String groupId;
     private final String areaName;
@@ -11,9 +13,44 @@ public final class GroupEvaluation {
     private final int backupAvailableCount;
     private final int backupMissingCount;
     private final boolean ruleMatched;
-    private final int continuousMatchedMinutes;
+    private final int continuousMatchedSeconds;
+    private final int alertDurationSeconds;
+    private final List<PointStatusView> pointStatuses;
     private final boolean shouldShowDialog;
     private final String message;
+
+    public GroupEvaluation(
+            String groupId,
+            String areaName,
+            String groupName,
+            String materialName,
+            GroupAlertStatus status,
+            boolean usePointEmpty,
+            int backupTotal,
+            int backupAvailableCount,
+            int backupMissingCount,
+            boolean ruleMatched,
+            int continuousMatchedSeconds,
+            int alertDurationSeconds,
+            List<PointStatusView> pointStatuses,
+            boolean shouldShowDialog,
+            String message) {
+        this.groupId = groupId;
+        this.areaName = areaName;
+        this.groupName = groupName;
+        this.materialName = materialName;
+        this.status = status;
+        this.usePointEmpty = usePointEmpty;
+        this.backupTotal = backupTotal;
+        this.backupAvailableCount = backupAvailableCount;
+        this.backupMissingCount = backupMissingCount;
+        this.ruleMatched = ruleMatched;
+        this.continuousMatchedSeconds = Math.max(0, continuousMatchedSeconds);
+        this.alertDurationSeconds = Math.max(0, alertDurationSeconds);
+        this.pointStatuses = pointStatuses == null ? List.of() : List.copyOf(pointStatuses);
+        this.shouldShowDialog = shouldShowDialog;
+        this.message = message;
+    }
 
     public GroupEvaluation(
             String groupId,
@@ -29,19 +66,22 @@ public final class GroupEvaluation {
             int continuousMatchedMinutes,
             boolean shouldShowDialog,
             String message) {
-        this.groupId = groupId;
-        this.areaName = areaName;
-        this.groupName = groupName;
-        this.materialName = materialName;
-        this.status = status;
-        this.usePointEmpty = usePointEmpty;
-        this.backupTotal = backupTotal;
-        this.backupAvailableCount = backupAvailableCount;
-        this.backupMissingCount = backupMissingCount;
-        this.ruleMatched = ruleMatched;
-        this.continuousMatchedMinutes = continuousMatchedMinutes;
-        this.shouldShowDialog = shouldShowDialog;
-        this.message = message;
+        this(
+                groupId,
+                areaName,
+                groupName,
+                materialName,
+                status,
+                usePointEmpty,
+                backupTotal,
+                backupAvailableCount,
+                backupMissingCount,
+                ruleMatched,
+                Math.max(0, continuousMatchedMinutes) * 60,
+                Math.max(0, continuousMatchedMinutes) * 60,
+                List.of(),
+                shouldShowDialog,
+                message);
     }
 
     public String groupId() {
@@ -84,8 +124,23 @@ public final class GroupEvaluation {
         return ruleMatched;
     }
 
+    public int continuousMatchedSeconds() {
+        return continuousMatchedSeconds;
+    }
+
+    public int alertDurationSeconds() {
+        return alertDurationSeconds;
+    }
+
+    public List<PointStatusView> pointStatuses() {
+        return pointStatuses;
+    }
+
     public int continuousMatchedMinutes() {
-        return continuousMatchedMinutes;
+        if (continuousMatchedSeconds == 0) {
+            return 0;
+        }
+        return (continuousMatchedSeconds + 59) / 60;
     }
 
     public boolean shouldShowDialog() {
