@@ -9,6 +9,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -127,6 +128,7 @@ public final class ShelfPointMonitorApp extends JFrame {
     private final JCheckBox groupEnabledBox = new JCheckBox("启用");
     private final JCheckBox ruleEnabledBox = new JCheckBox("启用规则", true);
     private final JCheckBox requireUseEmptyBox = new JCheckBox("使用位无货架", true);
+    private final JCheckBox backupThresholdParticipatesBox = new JCheckBox("备用位下限参与报警", true);
     private final JSpinner minBackupAvailableSpinner = new JSpinner(new SpinnerNumberModel(3, 0, 999, 1));
     private final JSpinner durationMinutesSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 1440, 1));
     private final JSpinner groupCheckIntervalMinutesSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1440, 1));
@@ -138,6 +140,8 @@ public final class ShelfPointMonitorApp extends JFrame {
         }
     };
     private final JTable groupPointTable = new JTable(groupPointModel);
+    private final JPanel pointStatusPanel = new JPanel(new GridBagLayout());
+    private final JLabel groupSummaryLabel = new JLabel("当前判断：未检测");
     private final JTextArea groupRuntimeArea = new JTextArea();
 
     private List<ConnectionProfile> profiles = new ArrayList<>();
@@ -341,12 +345,27 @@ public final class ShelfPointMonitorApp extends JFrame {
         groupPointTable.getColumnModel().getColumn(3).setPreferredWidth(60);
         groupPointTable.getColumnModel().getColumn(0).setCellEditor(
                 new DefaultCellEditor(new JComboBox<>(new String[] {PointRole.USE.name(), PointRole.BACKUP.name()})));
-        detail.add(new JScrollPane(groupPointTable), BorderLayout.CENTER);
+        JPanel pointConfigPanel = new JPanel(new BorderLayout(8, 8));
+        pointConfigPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("点位配置"));
+        pointConfigPanel.add(new JScrollPane(groupPointTable), BorderLayout.CENTER);
+
+        JPanel statusBoard = new JPanel(new BorderLayout(8, 8));
+        statusBoard.setBorder(javax.swing.BorderFactory.createTitledBorder("点位状态看板"));
+        groupSummaryLabel.setFont(groupSummaryLabel.getFont().deriveFont(Font.BOLD, 15f));
+        pointStatusPanel.setBackground(Color.WHITE);
+        pointStatusPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        statusBoard.add(groupSummaryLabel, BorderLayout.NORTH);
+        statusBoard.add(new JScrollPane(pointStatusPanel), BorderLayout.CENTER);
 
         groupRuntimeArea.setEditable(false);
-        groupRuntimeArea.setRows(8);
+        groupRuntimeArea.setRows(4);
         groupRuntimeArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
-        detail.add(new JScrollPane(groupRuntimeArea), BorderLayout.SOUTH);
+        statusBoard.add(new JScrollPane(groupRuntimeArea), BorderLayout.SOUTH);
+
+        JSplitPane detailSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, statusBoard, pointConfigPanel);
+        detailSplit.setResizeWeight(0.65);
+        detailSplit.setDividerLocation(360);
+        detail.add(detailSplit, BorderLayout.CENTER);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, groupScroll, detail);
         split.setDividerLocation(240);
@@ -376,11 +395,12 @@ public final class ShelfPointMonitorApp extends JFrame {
         addField(form, row, 2, "物料", groupMaterialField);
         addCheckBox(form, row, 4, ruleEnabledBox);
         row++;
-        addField(form, row, 0, "最少备用位有料", minBackupAvailableSpinner);
-        addField(form, row, 2, "持续分钟", durationMinutesSpinner);
+        addField(form, row, 0, "检测周期(分钟)", groupCheckIntervalMinutesSpinner);
+        addField(form, row, 2, "报警持续(分钟)", durationMinutesSpinner);
         addCheckBox(form, row, 4, requireUseEmptyBox);
         row++;
-        addField(form, row, 0, "检测周期(分钟)", groupCheckIntervalMinutesSpinner);
+        addField(form, row, 0, "最少备用位有料", minBackupAvailableSpinner);
+        addCheckBox(form, row, 2, backupThresholdParticipatesBox);
         return form;
     }
 
@@ -766,12 +786,17 @@ public final class ShelfPointMonitorApp extends JFrame {
         requireUseEmptyBox.setSelected(group.rule().requireUsePointEmpty());
         minBackupAvailableSpinner.setValue(group.rule().minBackupAvailable());
         durationMinutesSpinner.setValue(group.rule().durationMinutes());
+        backupThresholdParticipatesBox.setSelected(group.rule().backupThresholdParticipates());
         groupCheckIntervalMinutesSpinner.setValue(Math.max(1, (group.checkIntervalSeconds() + 59) / 60));
         groupPointModel.setRowCount(0);
         for (GroupMonitorPoint point : group.points()) {
             groupPointModel.addRow(new Object[] {
                     point.role().name(), point.alias(), point.code(), point.enabled()});
         }
+        groupSummaryLabel.setText("当前判断：未检测");
+        pointStatusPanel.removeAll();
+        pointStatusPanel.revalidate();
+        pointStatusPanel.repaint();
     }
 
     private void addPointGroup() {
@@ -793,7 +818,7 @@ public final class ShelfPointMonitorApp extends JFrame {
                             new GroupMonitorPoint(id + "-backup-2", "BACKUP_POINT_002", "备用位2", PointRole.BACKUP, true, 3),
                             new GroupMonitorPoint(id + "-backup-3", "BACKUP_POINT_003", "备用位3", PointRole.BACKUP, true, 4),
                             new GroupMonitorPoint(id + "-backup-4", "BACKUP_POINT_004", "备用位4", PointRole.BACKUP, true, 5)),
-                    new GroupAlertRule(true, true, 3, 5)));
+                    new GroupAlertRule(true, true, 3, 5, true)));
             refreshGroupList(id);
         } catch (Exception ex) {
             showError(ex);
@@ -866,7 +891,8 @@ public final class ShelfPointMonitorApp extends JFrame {
                         ruleEnabledBox.isSelected(),
                         requireUseEmptyBox.isSelected(),
                         (Integer) minBackupAvailableSpinner.getValue(),
-                        (Integer) durationMinutesSpinner.getValue()));
+                        (Integer) durationMinutesSpinner.getValue(),
+                        backupThresholdParticipatesBox.isSelected()));
         pointGroups.set(index, group);
     }
 
@@ -1005,6 +1031,7 @@ public final class ShelfPointMonitorApp extends JFrame {
             appendCheckLog(now, evaluation);
             appendGroupEvents(now, evaluation);
             evaluations.add(evaluation);
+            updateSelectedGroupBoard(evaluation);
             runtime.append(formatGroupCheckResult(source, records, evaluation)).append(System.lineSeparator());
             checkedGroups++;
             if (evaluation.shouldShowDialog() && !dialogRequested) {
@@ -1017,6 +1044,28 @@ public final class ShelfPointMonitorApp extends JFrame {
         appendStatus(source + "完成，点位组 " + checkedGroups + " 个"
                 + (failedGroups > 0 ? "，失败 " + failedGroups + " 个" : "") + "。");
         return new GroupCheckRunResult(checkedGroups, failedGroups, dialogRequested, evaluations);
+    }
+
+    private void updateSelectedGroupBoard(GroupEvaluation evaluation) {
+        SwingUtilities.invokeLater(() -> {
+            if (!evaluation.groupId().equals(selectedGroupId())) {
+                return;
+            }
+            String message = evaluation.message();
+            if (message == null || message.isBlank()) {
+                message = GroupStatusText.statusText(evaluation.status());
+            }
+            groupSummaryLabel.setText("当前判断：" + message);
+            renderPointStatusBoard(evaluation);
+        });
+    }
+
+    private String selectedGroupId() {
+        int index = groupList.getSelectedIndex();
+        if (index < 0 || index >= pointGroups.size()) {
+            return "";
+        }
+        return pointGroups.get(index).id();
     }
 
     private List<PointDefinition> pointDefinitions(PointGroupDefinition group) {
@@ -1056,6 +1105,80 @@ public final class ShelfPointMonitorApp extends JFrame {
         }
     }
 
+    private void renderPointStatusBoard(GroupEvaluation evaluation) {
+        pointStatusPanel.removeAll();
+
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.insets = new Insets(6, 6, 6, 6);
+        constraints.fill = GridBagConstraints.BOTH;
+        constraints.weightx = 1.0;
+        constraints.weighty = 0.0;
+
+        int row = 0;
+        int col = 0;
+        for (PointStatusView point : evaluation.pointStatuses()) {
+            JPanel card = pointStatusCard(point);
+            if (point.role() == PointRole.USE) {
+                constraints.gridx = 0;
+                constraints.gridy = row++;
+                constraints.gridwidth = 4;
+                pointStatusPanel.add(card, constraints);
+                constraints.gridwidth = 1;
+                col = 0;
+            } else {
+                constraints.gridx = col;
+                constraints.gridy = row;
+                constraints.gridwidth = 1;
+                pointStatusPanel.add(card, constraints);
+                col++;
+                if (col >= 4) {
+                    col = 0;
+                    row++;
+                }
+            }
+        }
+
+        pointStatusPanel.revalidate();
+        pointStatusPanel.repaint();
+    }
+
+    private JPanel pointStatusCard(PointStatusView point) {
+        JPanel card = new JPanel(new GridLayout(0, 1, 4, 4));
+        Color color = statusColor(point.status());
+        card.setBackground(Color.WHITE);
+        card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+                javax.swing.BorderFactory.createLineBorder(color, 2),
+                javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+
+        JLabel title = new JLabel((point.role() == PointRole.USE ? "使用位：" : "备用位：") + point.alias());
+        title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, point.role() == PointRole.USE ? 16 : 14));
+        JLabel status = new JLabel(point.statusText());
+        status.setFont(new Font(Font.SANS_SERIF, Font.BOLD, point.role() == PointRole.USE ? 26 : 22));
+        status.setForeground(color);
+
+        String shelfCode = point.shelfCode() == null || point.shelfCode().isBlank() ? "--" : point.shelfCode();
+        String reason = point.reason() == null || point.reason().isBlank() ? "--" : point.reason();
+        card.add(title);
+        card.add(status);
+        card.add(new JLabel("点位：" + point.pointCode()));
+        card.add(new JLabel("货架：" + shelfCode));
+        card.add(new JLabel("原因：" + reason));
+        return card;
+    }
+
+    private Color statusColor(PointMaterialStatus status) {
+        if (status == PointMaterialStatus.AVAILABLE) {
+            return new Color(24, 128, 72);
+        }
+        if (status == PointMaterialStatus.EMPTY) {
+            return new Color(190, 48, 48);
+        }
+        if (status == PointMaterialStatus.MISSING) {
+            return new Color(112, 112, 112);
+        }
+        return new Color(150, 150, 150);
+    }
+
     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
         String message = evaluation.message();
         if (message == null || message.isBlank()) {
@@ -1074,12 +1197,11 @@ public final class ShelfPointMonitorApp extends JFrame {
                     + evaluation.continuousMatchedMinutes()
                     + " 分钟";
         }
-        return source
+        return TIME_FORMAT.format(LocalDateTime.now())
+                + " "
+                + GroupStatusText.statusText(evaluation.status())
                 + "："
-                + message
-                + "；本次查询记录："
-                + records.size()
-                + " 条";
+                + message;
     }
 
     private void startMonitoring() {

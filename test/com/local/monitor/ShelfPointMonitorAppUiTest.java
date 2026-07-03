@@ -22,12 +22,16 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import javax.swing.AbstractButton;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.text.JTextComponent;
 import javax.swing.SwingUtilities;
+import javax.swing.border.TitledBorder;
 
 public final class ShelfPointMonitorAppUiTest {
     public static void main(String[] args) throws Exception {
@@ -35,8 +39,11 @@ public final class ShelfPointMonitorAppUiTest {
         connectionPageUsesChineseOperatorLabels();
         alertPageContainsGroupPointTable();
         groupCheckIntervalFieldExists();
+        alertPageShowsPointStatusDashboardLanguage();
         updateSelectedGroupFromFormPreservesCustomInterval();
+        updateSelectedGroupFromFormSavesBackupThresholdParticipation();
         populateSelectedGroupRoundsPartialMinutesUp();
+        renderPointStatusBoardShowsMaterialStates();
         capturedMonitoredGroupsIgnoreLaterFormChanges();
         manualCheckUsesGroupSnapshotCapturedOnEdt();
         groupFetchFailureMarksCheckedAndContinues();
@@ -122,6 +129,33 @@ public final class ShelfPointMonitorAppUiTest {
         });
     }
 
+    private static void alertPageShowsPointStatusDashboardLanguage() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("检测周期(分钟)："),
+                        "dashboard should show group check interval");
+                TestSupport.assertTrue(texts.contains("报警持续(分钟)："),
+                        "dashboard should show alert duration");
+                TestSupport.assertTrue(texts.contains("备用位下限参与报警"),
+                        "dashboard should allow backup threshold participation");
+                TestSupport.assertTrue(texts.contains("点位状态看板"),
+                        "dashboard should have status board title");
+                TestSupport.assertTrue(texts.contains("当前判断：未检测"),
+                        "dashboard should show current business judgement");
+                TestSupport.assertTrue(fieldValue(app, "backupThresholdParticipatesBox", JCheckBox.class) != null,
+                        "backup threshold participation checkbox should exist");
+                TestSupport.assertTrue(fieldValue(app, "pointStatusPanel", JPanel.class) != null,
+                        "point status panel should exist");
+                TestSupport.assertTrue(fieldValue(app, "groupSummaryLabel", JLabel.class) != null,
+                        "group summary label should exist");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
     private static void updateSelectedGroupFromFormPreservesCustomInterval() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
@@ -148,6 +182,31 @@ public final class ShelfPointMonitorAppUiTest {
         });
     }
 
+    private static void updateSelectedGroupFromFormSavesBackupThresholdParticipation() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition source = group("group-001", 300);
+                setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+                invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+                invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+                JCheckBox box = fieldValue(app, "backupThresholdParticipatesBox", JCheckBox.class);
+                TestSupport.assertTrue(box.isSelected(),
+                        "test setup should load default backup threshold participation");
+                box.setSelected(false);
+                invoke(app, "updateSelectedGroupFromForm", new Class<?>[0]);
+
+                List<?> updatedGroups = fieldValue(app, "pointGroups", List.class);
+                PointGroupDefinition updated = (PointGroupDefinition) updatedGroups.get(0);
+                TestSupport.assertFalse(updated.rule().backupThresholdParticipates(),
+                        "backup threshold participation should be saved from checkbox");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
     private static void populateSelectedGroupRoundsPartialMinutesUp() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
@@ -160,6 +219,22 @@ public final class ShelfPointMonitorAppUiTest {
                 JSpinner spinner = fieldValue(app, "groupCheckIntervalMinutesSpinner", JSpinner.class);
                 TestSupport.assertEquals(2, spinner.getValue(),
                         "populate should round partial minute intervals up");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void renderPointStatusBoardShowsMaterialStates() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                invoke(app, "renderPointStatusBoard", new Class<?>[] {GroupEvaluation.class},
+                        groupEvaluationWithPointStatuses());
+
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("有料"), "point status board should show available text");
+                TestSupport.assertTrue(texts.contains("无料"), "point status board should show empty text");
             } finally {
                 app.dispose();
             }
@@ -415,6 +490,45 @@ public final class ShelfPointMonitorAppUiTest {
                 message);
     }
 
+    private static GroupEvaluation groupEvaluationWithPointStatuses() {
+        return new GroupEvaluation(
+                "group-001",
+                "A区",
+                "一号料架",
+                "标准件",
+                GroupAlertStatus.PENDING_ALERT,
+                true,
+                1,
+                1,
+                0,
+                true,
+                120,
+                300,
+                List.of(
+                        new PointStatusView(
+                                "use",
+                                "USE_POINT_001",
+                                "使用位",
+                                PointRole.USE,
+                                true,
+                                PointMaterialStatus.AVAILABLE,
+                                "SHELF_USE_001",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "正常"),
+                        new PointStatusView(
+                                "backup",
+                                "BACKUP_POINT_001",
+                                "备用位",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.EMPTY,
+                                "",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "无货架")),
+                false,
+                "观察中：使用位无料，备用位有料 1/1。");
+    }
+
     private static PointGroupDefinition group(String id, int checkIntervalSeconds) {
         return new PointGroupDefinition(
                 id,
@@ -500,6 +614,10 @@ public final class ShelfPointMonitorAppUiTest {
             texts.add(((AbstractButton) component).getText());
         } else if (component instanceof JTextComponent) {
             texts.add(((JTextComponent) component).getText());
+        }
+        if (component instanceof JComponent
+                && ((JComponent) component).getBorder() instanceof TitledBorder) {
+            texts.add(((TitledBorder) ((JComponent) component).getBorder()).getTitle());
         }
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
