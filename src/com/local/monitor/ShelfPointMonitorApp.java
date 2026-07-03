@@ -972,23 +972,29 @@ public final class ShelfPointMonitorApp extends JFrame {
     }
 
     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
+        String message = evaluation.message();
+        if (message == null || message.isBlank()) {
+            message = evaluation.areaName()
+                    + "/"
+                    + evaluation.groupName()
+                    + " 状态："
+                    + GroupStatusText.statusText(evaluation.status())
+                    + "；使用位："
+                    + (evaluation.usePointEmpty() ? "无料" : "有料")
+                    + "；备用位有料："
+                    + evaluation.backupAvailableCount()
+                    + "/"
+                    + evaluation.backupTotal()
+                    + "；持续缺料："
+                    + evaluation.continuousMatchedMinutes()
+                    + " 分钟";
+        }
         return source
-                + " "
-                + evaluation.areaName()
-                + "/"
-                + evaluation.groupName()
-                + " status="
-                + evaluation.status()
-                + " useEmpty="
-                + evaluation.usePointEmpty()
-                + " backup="
-                + evaluation.backupAvailableCount()
-                + "/"
-                + evaluation.backupTotal()
-                + " continuous="
-                + evaluation.continuousMatchedMinutes()
-                + "min records="
-                + records.size();
+                + "："
+                + message
+                + "；本次查询记录："
+                + records.size()
+                + " 条";
     }
 
     private void startMonitoring() {
@@ -1076,7 +1082,7 @@ public final class ShelfPointMonitorApp extends JFrame {
                 + System.lineSeparator()
                 + "物料：" + evaluation.materialName()
                 + System.lineSeparator()
-                + "状态：" + evaluation.status()
+                + "状态：" + GroupStatusText.statusText(evaluation.status())
                 + System.lineSeparator()
                 + "备用位有料：" + evaluation.backupAvailableCount() + "/" + evaluation.backupTotal()
                 + System.lineSeparator()

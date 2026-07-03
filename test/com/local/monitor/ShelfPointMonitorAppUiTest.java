@@ -5,7 +5,9 @@ import java.awt.Container;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import javax.swing.AbstractButton;
 import javax.swing.JLabel;
@@ -20,6 +22,7 @@ public final class ShelfPointMonitorAppUiTest {
         connectionPageUsesChineseOperatorLabels();
         alertPageContainsGroupPointTable();
         gridBagPanelsDoNotOverlapCells();
+        groupAlertTextsDoNotExposeTechnicalStatusNames();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
     }
 
@@ -79,6 +82,45 @@ public final class ShelfPointMonitorAppUiTest {
             try {
                 TestSupport.assertTrue(hasGroupPointTable(app.getContentPane()),
                         "alert page should contain the group point table");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void groupAlertTextsDoNotExposeTechnicalStatusNames() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Method formatResult = ShelfPointMonitorApp.class.getDeclaredMethod(
+                        "formatGroupCheckResult",
+                        String.class,
+                        List.class,
+                        GroupEvaluation.class);
+                formatResult.setAccessible(true);
+                Method alertText = ShelfPointMonitorApp.class.getDeclaredMethod(
+                        "groupAlertText",
+                        GroupEvaluation.class);
+                alertText.setAccessible(true);
+
+                String pendingRuntimeText = (String) formatResult.invoke(
+                        app,
+                        "手动检测",
+                        List.of(),
+                        groupEvaluation(GroupAlertStatus.PENDING_ALERT, "观察中：使用位无料，备用位有料 2/4。"));
+                String activeDialogText = (String) alertText.invoke(
+                        app,
+                        groupEvaluation(GroupAlertStatus.ACTIVE_ALERT, "需关注：请现场确认使用位和备用位。"));
+                String ackedDialogText = (String) alertText.invoke(
+                        app,
+                        groupEvaluation(GroupAlertStatus.ACKED_ALERT, "已关注：等待现场处理完成。"));
+
+                TestSupport.assertContains(pendingRuntimeText, "观察中", "runtime text should use Chinese pending status");
+                TestSupport.assertContains(activeDialogText, "状态：需关注", "dialog text should use Chinese active status");
+                TestSupport.assertContains(ackedDialogText, "状态：已关注", "dialog text should use Chinese acknowledged status");
+                assertNoTechnicalGroupText(pendingRuntimeText, "runtime text");
+                assertNoTechnicalGroupText(activeDialogText, "active dialog text");
+                assertNoTechnicalGroupText(ackedDialogText, "acknowledged dialog text");
             } finally {
                 app.dispose();
             }
@@ -148,6 +190,33 @@ public final class ShelfPointMonitorAppUiTest {
         return texts;
     }
 
+    private static GroupEvaluation groupEvaluation(GroupAlertStatus status, String message) {
+        return new GroupEvaluation(
+                "group-001",
+                "A区",
+                "一号料架",
+                "标准件",
+                status,
+                true,
+                4,
+                2,
+                2,
+                true,
+                5,
+                false,
+                message);
+    }
+
+    private static void assertNoTechnicalGroupText(String text, String context) {
+        TestSupport.assertNotContains(text, "status=", context + " should not leak debug status field");
+        TestSupport.assertNotContains(text, "PENDING_ALERT", context + " should not leak pending enum");
+        TestSupport.assertNotContains(text, "ACTIVE_ALERT", context + " should not leak active enum");
+        TestSupport.assertNotContains(text, "ACKED_ALERT", context + " should not leak acknowledged enum");
+        TestSupport.assertNotContains(text, "useEmpty=", context + " should not leak debug use point field");
+        TestSupport.assertNotContains(text, "backup=", context + " should not leak debug backup field");
+        TestSupport.assertNotContains(text, "continuous=", context + " should not leak debug duration field");
+    }
+
     private static void collectVisibleTexts(Component component, Set<String> texts) {
         if (component instanceof JLabel) {
             texts.add(((JLabel) component).getText());
@@ -204,6 +273,17 @@ public final class ShelfPointMonitorAppUiTest {
                 throw new AssertionError(message + " expected=" + expected + " actual=" + actual);
             }
         }
+
+        static void assertContains(String text, String expected, String message) {
+            if (text == null || !text.contains(expected)) {
+                throw new AssertionError(message + " expected to contain=" + expected + " actual=" + text);
+            }
+        }
+
+        static void assertNotContains(String text, String unexpected, String message) {
+            if (text != null && text.contains(unexpected)) {
+                throw new AssertionError(message + " unexpected=" + unexpected + " actual=" + text);
+            }
+        }
     }
 }
-
