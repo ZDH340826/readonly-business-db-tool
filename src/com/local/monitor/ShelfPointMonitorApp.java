@@ -1301,7 +1301,7 @@ public final class ShelfPointMonitorApp extends JFrame {
                 + abnormalPointText(evaluation)
                 + lineSeparator
                 + lineSeparator
-                + "使用位无料已达到报警时间，请现场确认补料或调度状态。";
+                + "报警条件已达到报警时间，请现场确认补料或调度状态。";
     }
 
     private String abnormalPointText(GroupEvaluation evaluation) {
@@ -1335,8 +1335,16 @@ public final class ShelfPointMonitorApp extends JFrame {
     }
 
     private JPanel buildGroupAlertButtons(GroupEvaluation evaluation, Runnable closeDialog) {
+        return buildGroupAlertButtons(evaluation, this::openLogs, closeDialog);
+    }
+
+    JPanel buildGroupAlertButtons(GroupEvaluation evaluation, Runnable openLogsAction, Runnable closeDialog) {
         JButton openLogsButton = new JButton("打开日志目录");
-        openLogsButton.addActionListener(e -> openLogs());
+        openLogsButton.addActionListener(e -> {
+            if (openLogsAction != null) {
+                openLogsAction.run();
+            }
+        });
 
         JButton ack = new JButton("已关注");
         ack.addActionListener(e -> {

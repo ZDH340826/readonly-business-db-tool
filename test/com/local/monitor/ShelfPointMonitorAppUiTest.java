@@ -2,6 +2,7 @@ package com.local.monitor;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.io.IOException;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.lang.reflect.Field;
@@ -54,6 +55,7 @@ public final class ShelfPointMonitorAppUiTest {
         groupSummaryDoesNotExposeTechnicalFields();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
         groupAlertTextUsesOperatorLanguageAndListsAbnormalPoints();
+        groupAlertTextUsesNeutralPromptWhenUsePointHasMaterial();
         groupAlertDialogButtonsIncludeOpenLogs();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
     }
@@ -538,8 +540,10 @@ public final class ShelfPointMonitorAppUiTest {
                         "dialog should list missing backup point with reason");
                 TestSupport.assertNotContains(text, "BACKUP_POINT_001",
                         "dialog should not list available points as abnormal");
-                TestSupport.assertContains(text, "使用位无料已达到报警时间，请现场确认补料或调度状态。",
+                TestSupport.assertContains(text, "报警条件已达到报警时间，请现场确认补料或调度状态。",
                         "dialog should end with the operator action prompt");
+                TestSupport.assertNotContains(text, "使用位无料已达到报警时间",
+                        "dialog should not hard-code the use point as empty");
                 assertNoTechnicalGroupText(text, "operator alert text");
             } finally {
                 app.dispose();
@@ -547,26 +551,86 @@ public final class ShelfPointMonitorAppUiTest {
         });
     }
 
+    private static void groupAlertTextUsesNeutralPromptWhenUsePointHasMaterial() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Method alertText = ShelfPointMonitorApp.class.getDeclaredMethod(
+                        "groupAlertText",
+                        GroupEvaluation.class);
+                alertText.setAccessible(true);
+
+                String text = (String) alertText.invoke(app, groupEvaluationWithBackupShortageAlert());
+
+                TestSupport.assertContains(text, "使用位：有料",
+                        "dialog should show the use point state from evaluation");
+                TestSupport.assertNotContains(text, "使用位无料已达到报警时间",
+                        "dialog should not claim use point empty when it has material");
+                TestSupport.assertContains(text, "报警条件已达到报警时间，请现场确认补料或调度状态。",
+                        "dialog should use a neutral action prompt for backup-only alerts");
+                assertNoTechnicalGroupText(text, "backup-only active alert text");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
     private static void groupAlertDialogButtonsIncludeOpenLogs() throws Exception {
+        Path logDir = Files.createTempDirectory("group-alert-button-test").resolve("logs");
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
             try {
                 Method buttonsMethod = ShelfPointMonitorApp.class.getDeclaredMethod(
                         "buildGroupAlertButtons",
                         GroupEvaluation.class,
+                        Runnable.class,
                         Runnable.class);
                 buttonsMethod.setAccessible(true);
 
+                GroupEvaluation evaluation = groupEvaluationWithAbnormalPointStatuses();
+                boolean[] closeCalled = {false};
+                Runnable openLogsAction = () -> {
+                    try {
+                        Files.createDirectories(logDir);
+                    } catch (IOException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                };
                 JPanel buttons = (JPanel) buttonsMethod.invoke(
                         app,
-                        groupEvaluationWithAbnormalPointStatuses(),
-                        (Runnable) () -> { });
+                        evaluation,
+                        openLogsAction,
+                        (Runnable) () -> closeCalled[0] = true);
                 Set<String> texts = collectVisibleTexts(buttons);
 
                 TestSupport.assertTrue(texts.contains("打开日志目录"),
                         "group alert dialog should include an open logs button");
                 TestSupport.assertTrue(texts.contains("已关注"),
                         "group alert dialog should keep the acknowledge button");
+
+                @SuppressWarnings("unchecked")
+                Map<String, GroupAlertStatus> statuses =
+                        (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+                statuses.put(evaluation.groupId(), GroupAlertStatus.ACTIVE_ALERT);
+
+                AbstractButton openLogs = findButtonByText(buttons, "打开日志目录");
+                AbstractButton acknowledge = findButtonByText(buttons, "已关注");
+
+                openLogs.doClick();
+
+                TestSupport.assertTrue(Files.isDirectory(logDir),
+                        "open logs action should create the requested log directory");
+                TestSupport.assertEquals(GroupAlertStatus.ACTIVE_ALERT, statuses.get(evaluation.groupId()),
+                        "open logs should not change the last group alert status");
+                TestSupport.assertFalse(closeCalled[0],
+                        "open logs should not close the dialog");
+
+                acknowledge.doClick();
+
+                TestSupport.assertEquals(GroupAlertStatus.ACKED_ALERT, statuses.get(evaluation.groupId()),
+                        "acknowledge should update the last group alert status");
+                TestSupport.assertTrue(closeCalled[0],
+                        "acknowledge should close the dialog");
             } finally {
                 app.dispose();
             }
@@ -611,6 +675,21 @@ public final class ShelfPointMonitorAppUiTest {
             }
         }
         return null;
+    }
+
+    private static AbstractButton findButtonByText(Container container, String text) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof AbstractButton && text.equals(((AbstractButton) component).getText())) {
+                return (AbstractButton) component;
+            }
+            if (component instanceof Container && !(component instanceof AbstractButton)) {
+                AbstractButton found = findButtonByText((Container) component, text);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        throw new AssertionError("Button not found: " + text);
     }
 
     private static boolean hasGroupPointTable(Container container) {
@@ -769,6 +848,45 @@ public final class ShelfPointMonitorAppUiTest {
                                 "停用")),
                 true,
                 "status=ACTIVE_ALERT useEmpty=true backup=1/3");
+    }
+
+    private static GroupEvaluation groupEvaluationWithBackupShortageAlert() {
+        return new GroupEvaluation(
+                "group-002",
+                "A区",
+                "二号料架",
+                "标准件",
+                GroupAlertStatus.ACTIVE_ALERT,
+                false,
+                3,
+                0,
+                3,
+                true,
+                180,
+                300,
+                List.of(
+                        new PointStatusView(
+                                "use",
+                                "USE_POINT_002",
+                                "使用位",
+                                PointRole.USE,
+                                true,
+                                PointMaterialStatus.AVAILABLE,
+                                "SHELF_USE_002",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "正常"),
+                        new PointStatusView(
+                                "backup",
+                                "BACKUP_POINT_004",
+                                "备用位",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.MISSING,
+                                "",
+                                null,
+                                "未返回记录")),
+                true,
+                "备用位不足");
     }
 
     private static GroupEvaluation groupEvaluationWithBackupBeforeUsePointStatuses() {
