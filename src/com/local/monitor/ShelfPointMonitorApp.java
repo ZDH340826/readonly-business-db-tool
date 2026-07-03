@@ -1114,27 +1114,36 @@ public final class ShelfPointMonitorApp extends JFrame {
         constraints.weightx = 1.0;
         constraints.weighty = 0.0;
 
-        int row = 0;
-        int col = 0;
+        List<PointStatusView> usePoints = new ArrayList<>();
+        List<PointStatusView> backupPoints = new ArrayList<>();
         for (PointStatusView point : evaluation.pointStatuses()) {
-            JPanel card = pointStatusCard(point);
             if (point.role() == PointRole.USE) {
-                constraints.gridx = 0;
-                constraints.gridy = row++;
-                constraints.gridwidth = 4;
-                pointStatusPanel.add(card, constraints);
-                constraints.gridwidth = 1;
-                col = 0;
+                usePoints.add(point);
             } else {
-                constraints.gridx = col;
-                constraints.gridy = row;
-                constraints.gridwidth = 1;
-                pointStatusPanel.add(card, constraints);
-                col++;
-                if (col >= 4) {
-                    col = 0;
-                    row++;
-                }
+                backupPoints.add(point);
+            }
+        }
+
+        int row = 0;
+        for (PointStatusView point : usePoints) {
+            JPanel card = pointStatusCard(point);
+            constraints.gridx = 0;
+            constraints.gridy = row++;
+            constraints.gridwidth = 4;
+            pointStatusPanel.add(card, constraints);
+        }
+
+        constraints.gridwidth = 1;
+        int col = 0;
+        for (PointStatusView point : backupPoints) {
+            JPanel card = pointStatusCard(point);
+            constraints.gridx = col;
+            constraints.gridy = row;
+            pointStatusPanel.add(card, constraints);
+            col++;
+            if (col >= 4) {
+                col = 0;
+                row++;
             }
         }
 

@@ -44,9 +44,11 @@ public final class ShelfPointMonitorAppUiTest {
         updateSelectedGroupFromFormSavesBackupThresholdParticipation();
         populateSelectedGroupRoundsPartialMinutesUp();
         renderPointStatusBoardShowsMaterialStates();
+        renderPointStatusBoardDoesNotOverlapWhenBackupsPrecedeUse();
         capturedMonitoredGroupsIgnoreLaterFormChanges();
         manualCheckUsesGroupSnapshotCapturedOnEdt();
         groupFetchFailureMarksCheckedAndContinues();
+        checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
         gridBagPanelsDoNotOverlapCells();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
@@ -233,8 +235,29 @@ public final class ShelfPointMonitorAppUiTest {
                         groupEvaluationWithPointStatuses());
 
                 Set<String> texts = collectVisibleTexts(app.getContentPane());
-                TestSupport.assertTrue(texts.contains("有料"), "point status board should show available text");
-                TestSupport.assertTrue(texts.contains("无料"), "point status board should show empty text");
+                TestSupport.assertTrue(texts.contains(PointMaterialStatus.AVAILABLE.displayText()),
+                        "point status board should show available text");
+                TestSupport.assertTrue(texts.contains(PointMaterialStatus.EMPTY.displayText()),
+                        "point status board should show empty text");
+                TestSupport.assertTrue(texts.contains(PointMaterialStatus.MISSING.displayText()),
+                        "point status board should show missing text");
+                TestSupport.assertTrue(texts.contains(PointMaterialStatus.DISABLED.displayText()),
+                        "point status board should show disabled text");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void renderPointStatusBoardDoesNotOverlapWhenBackupsPrecedeUse() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                invoke(app, "renderPointStatusBoard", new Class<?>[] {GroupEvaluation.class},
+                        groupEvaluationWithBackupBeforeUsePointStatuses());
+
+                JPanel panel = fieldValue(app, "pointStatusPanel", JPanel.class);
+                scanGridBagContainers(panel);
             } finally {
                 app.dispose();
             }
@@ -365,6 +388,39 @@ public final class ShelfPointMonitorAppUiTest {
                     "failed group should not update last alert status without an evaluation");
             TestSupport.assertEquals(GroupAlertStatus.NORMAL, statuses.get(healthyGroup.id()),
                     "successful healthy group should update its last status");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        PointGroupDefinition group = group("group-dashboard", 60);
+        runOnEdtAndWait(() -> {
+            appRef[0] = new ShelfPointMonitorApp();
+            setField(appRef[0], "pointGroups", new ArrayList<>(List.of(group)));
+            invoke(appRef[0], "refreshGroupList", new Class<?>[] {String.class}, group.id());
+            invoke(appRef[0], "populateSelectedGroup", new Class<?>[0]);
+        });
+        try {
+            ShelfPointMonitorApp app = appRef[0];
+            app.checkGroupsWithFetcher(
+                    List.of(group),
+                    LocalDateTime.of(2026, 7, 3, 10, 20),
+                    "test",
+                    ignored -> recordsWithEmptyUseAndAvailableBackup());
+
+            runOnEdtAndWait(() -> {
+                JLabel summary = fieldValue(app, "groupSummaryLabel", JLabel.class);
+                TestSupport.assertContains(summary.getText(), "\u5f53\u524d\u5224\u65ad",
+                        "selected dashboard should show current judgement after EDT flush");
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains(PointMaterialStatus.AVAILABLE.displayText()),
+                        "selected dashboard should show available text after check");
+                TestSupport.assertTrue(texts.contains(PointMaterialStatus.EMPTY.displayText()),
+                        "selected dashboard should show empty text after check");
+            });
         } finally {
             shutdownExecutor(appRef[0]);
             runOnEdtAndWait(() -> appRef[0].dispose());
@@ -524,9 +580,88 @@ public final class ShelfPointMonitorAppUiTest {
                                 PointMaterialStatus.EMPTY,
                                 "",
                                 LocalDateTime.of(2026, 7, 3, 10, 0),
-                                "无货架")),
+                                "无货架"),
+                        new PointStatusView(
+                                "missing",
+                                "BACKUP_POINT_002",
+                                "Backup 2",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.MISSING,
+                                "",
+                                null,
+                                "missing"),
+                        new PointStatusView(
+                                "disabled",
+                                "BACKUP_POINT_003",
+                                "Backup 3",
+                                PointRole.BACKUP,
+                                false,
+                                PointMaterialStatus.DISABLED,
+                                "",
+                                null,
+                                "disabled")),
                 false,
                 "观察中：使用位无料，备用位有料 1/1。");
+    }
+
+    private static GroupEvaluation groupEvaluationWithBackupBeforeUsePointStatuses() {
+        return new GroupEvaluation(
+                "group-001",
+                "Area A",
+                "Rear Panel",
+                "Material A",
+                GroupAlertStatus.PENDING_ALERT,
+                true,
+                3,
+                1,
+                2,
+                true,
+                120,
+                300,
+                List.of(
+                        new PointStatusView(
+                                "backup-1",
+                                "BACKUP_POINT_001",
+                                "Backup 1",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.AVAILABLE,
+                                "SHELF_BACKUP_001",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "normal"),
+                        new PointStatusView(
+                                "backup-2",
+                                "BACKUP_POINT_002",
+                                "Backup 2",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.EMPTY,
+                                "",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "empty"),
+                        new PointStatusView(
+                                "use",
+                                "USE_POINT_001",
+                                "Use",
+                                PointRole.USE,
+                                true,
+                                PointMaterialStatus.EMPTY,
+                                "",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "empty"),
+                        new PointStatusView(
+                                "backup-3",
+                                "BACKUP_POINT_003",
+                                "Backup 3",
+                                PointRole.BACKUP,
+                                false,
+                                PointMaterialStatus.DISABLED,
+                                "",
+                                null,
+                                "disabled")),
+                false,
+                "pending");
     }
 
     private static PointGroupDefinition group(String id, int checkIntervalSeconds) {
@@ -546,6 +681,12 @@ public final class ShelfPointMonitorAppUiTest {
     private static List<PointRecord> healthyRecords() {
         return List.of(
                 record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0));
+    }
+
+    private static List<PointRecord> recordsWithEmptyUseAndAvailableBackup() {
+        return List.of(
+                record("USE_POINT_001", "", 1, 0),
                 record("BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0));
     }
 
