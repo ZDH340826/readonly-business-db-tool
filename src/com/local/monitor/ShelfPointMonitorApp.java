@@ -1189,23 +1189,17 @@ public final class ShelfPointMonitorApp extends JFrame {
     }
 
     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
-        String message = evaluation.message();
-        if (message == null || message.isBlank()) {
-            message = evaluation.areaName()
-                    + "/"
-                    + evaluation.groupName()
-                    + " 状态："
-                    + GroupStatusText.statusText(evaluation.status())
-                    + "；使用位："
-                    + (evaluation.usePointEmpty() ? "无料" : "有料")
-                    + "；备用位有料："
-                    + evaluation.backupAvailableCount()
-                    + "/"
-                    + evaluation.backupTotal()
-                    + "；持续缺料："
-                    + evaluation.continuousMatchedMinutes()
-                    + " 分钟";
-        }
+        String message = GroupStatusText.summary(
+                evaluation.areaName(),
+                evaluation.groupName(),
+                evaluation.materialName(),
+                evaluation.status(),
+                evaluation.usePointEmpty(),
+                evaluation.backupTotal(),
+                evaluation.backupAvailableCount(),
+                evaluation.continuousMatchedSeconds(),
+                evaluation.alertDurationSeconds(),
+                evaluation.pointStatuses());
         return TIME_FORMAT.format(LocalDateTime.now())
                 + " "
                 + GroupStatusText.statusText(evaluation.status())
@@ -1271,29 +1265,12 @@ public final class ShelfPointMonitorApp extends JFrame {
             text.setBackground(new Color(255, 250, 240));
             dialog.add(text, BorderLayout.CENTER);
 
-            JButton ack = new JButton("已关注");
-            ack.addActionListener(e -> {
-                synchronized (groupMonitorLock) {
-                    GroupRuntimeState state = groupStates.get(evaluation.groupId());
-                    if (state != null) {
-                        state.acknowledge();
-                    }
-                    lastGroupStatuses.put(evaluation.groupId(), GroupAlertStatus.ACKED_ALERT);
-                }
-                try {
-                    groupLogWriter.appendEvent(LocalDateTime.now(), "ACKNOWLEDGED", evaluation);
-                } catch (Exception ex) {
-                    appendStatus("CSV事件日志写入失败：" + ex.getMessage());
-                }
-                appendStatus("用户已关注点位组报警：" + evaluation.groupId());
+            dialog.add(buildGroupAlertButtons(evaluation, () -> {
                 dialog.dispose();
                 activeDialog = null;
-            });
-            JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-            buttons.add(ack);
-            dialog.add(buttons, BorderLayout.SOUTH);
+            }), BorderLayout.SOUTH);
 
-            dialog.setSize(560, 340);
+            dialog.setSize(640, 420);
             dialog.setLocationRelativeTo(this);
             activeDialog = dialog;
             dialog.setVisible(true);
@@ -1301,25 +1278,104 @@ public final class ShelfPointMonitorApp extends JFrame {
     }
 
     private String groupAlertText(GroupEvaluation evaluation) {
+        String lineSeparator = System.lineSeparator();
         return "检测时间：" + TIME_FORMAT.format(LocalDateTime.now())
-                + System.lineSeparator()
-                + "区域：" + evaluation.areaName()
-                + System.lineSeparator()
-                + "点位组：" + evaluation.groupName()
-                + System.lineSeparator()
+                + lineSeparator
+                + evaluation.areaName()
+                + " / "
+                + evaluation.groupName()
+                + " "
+                + alertHeadlineStatusText(evaluation.status())
+                + lineSeparator
                 + "物料：" + evaluation.materialName()
-                + System.lineSeparator()
-                + "状态：" + GroupStatusText.statusText(evaluation.status())
-                + System.lineSeparator()
-                + "备用位有料：" + evaluation.backupAvailableCount() + "/" + evaluation.backupTotal()
-                + System.lineSeparator()
-                + "持续缺料：" + evaluation.continuousMatchedMinutes() + " 分钟"
-                + System.lineSeparator()
-                + System.lineSeparator()
-                + evaluation.message()
-                + System.lineSeparator()
-                + System.lineSeparator()
-                + "请现场确认后点击“已关注”。";
+                + lineSeparator
+                + "使用位：" + (evaluation.usePointEmpty() ? "无料" : "有料")
+                + lineSeparator
+                + "备用位：" + evaluation.backupAvailableCount() + "/" + evaluation.backupTotal() + " 有料"
+                + lineSeparator
+                + "持续：" + evaluation.continuousMatchedMinutes() + " 分钟"
+                + lineSeparator
+                + lineSeparator
+                + "异常点位列表："
+                + lineSeparator
+                + abnormalPointText(evaluation)
+                + lineSeparator
+                + lineSeparator
+                + "使用位无料已达到报警时间，请现场确认补料或调度状态。";
+    }
+
+    private String abnormalPointText(GroupEvaluation evaluation) {
+        StringBuilder builder = new StringBuilder();
+        for (PointStatusView point : evaluation.pointStatuses()) {
+            if (point.status() != PointMaterialStatus.EMPTY && point.status() != PointMaterialStatus.MISSING) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(System.lineSeparator());
+            }
+            builder.append(roleText(point.role()))
+                    .append(" ")
+                    .append(point.pointCode())
+                    .append(" ")
+                    .append(point.statusText())
+                    .append(" 原因：")
+                    .append(point.reason() == null || point.reason().isBlank() ? "未填写原因" : point.reason());
+        }
+        if (builder.length() == 0) {
+            return "无异常点位明细";
+        }
+        return builder.toString();
+    }
+
+    private String alertHeadlineStatusText(GroupAlertStatus status) {
+        if (status == GroupAlertStatus.ACTIVE_ALERT) {
+            return "需要关注";
+        }
+        return GroupStatusText.statusText(status);
+    }
+
+    private JPanel buildGroupAlertButtons(GroupEvaluation evaluation, Runnable closeDialog) {
+        JButton openLogsButton = new JButton("打开日志目录");
+        openLogsButton.addActionListener(e -> openLogs());
+
+        JButton ack = new JButton("已关注");
+        ack.addActionListener(e -> {
+            acknowledgeGroupAlert(evaluation);
+            if (closeDialog != null) {
+                closeDialog.run();
+            }
+        });
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttons.add(openLogsButton);
+        buttons.add(ack);
+        return buttons;
+    }
+
+    private void acknowledgeGroupAlert(GroupEvaluation evaluation) {
+        synchronized (groupMonitorLock) {
+            GroupRuntimeState state = groupStates.get(evaluation.groupId());
+            if (state != null) {
+                state.acknowledge();
+            }
+            lastGroupStatuses.put(evaluation.groupId(), GroupAlertStatus.ACKED_ALERT);
+        }
+        try {
+            groupLogWriter.appendEvent(LocalDateTime.now(), "ACKNOWLEDGED", evaluation);
+        } catch (Exception ex) {
+            appendStatus("CSV事件日志写入失败：" + ex.getMessage());
+        }
+        appendStatus("用户已关注点位组报警：" + evaluation.groupId());
+    }
+
+    private String roleText(PointRole role) {
+        if (role == PointRole.USE) {
+            return "使用位";
+        }
+        if (role == PointRole.BACKUP) {
+            return "备用位";
+        }
+        return "点位";
     }
 
     private void loadPointConfig() {

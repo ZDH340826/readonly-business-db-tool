@@ -38,12 +38,36 @@ public final class GroupStatusText {
             int continuousMatchedSeconds,
             int alertDurationSeconds,
             List<PointStatusView> pointStatuses) {
+        return summary(
+                group.areaName(),
+                group.groupName(),
+                group.materialName(),
+                status,
+                usePointEmpty,
+                backupTotal,
+                backupAvailable,
+                continuousMatchedSeconds,
+                alertDurationSeconds,
+                pointStatuses);
+    }
+
+    public static String summary(
+            String areaName,
+            String groupName,
+            String materialName,
+            GroupAlertStatus status,
+            boolean usePointEmpty,
+            int backupTotal,
+            int backupAvailable,
+            int continuousMatchedSeconds,
+            int alertDurationSeconds,
+            List<PointStatusView> pointStatuses) {
         StringBuilder builder = new StringBuilder();
-        builder.append(group.areaName())
+        builder.append(areaName)
                 .append(" / ")
-                .append(group.groupName())
+                .append(groupName)
                 .append(" / ")
-                .append(group.materialName())
+                .append(materialName)
                 .append("：")
                 .append(statusText(status))
                 .append("。");

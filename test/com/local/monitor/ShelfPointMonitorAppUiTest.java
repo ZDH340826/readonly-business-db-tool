@@ -50,7 +50,11 @@ public final class ShelfPointMonitorAppUiTest {
         groupFetchFailureMarksCheckedAndContinues();
         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
         gridBagPanelsDoNotOverlapCells();
+        groupStatusTextUsesOperatorChinese();
+        groupSummaryDoesNotExposeTechnicalFields();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
+        groupAlertTextUsesOperatorLanguageAndListsAbnormalPoints();
+        groupAlertDialogButtonsIncludeOpenLogs();
         System.out.println("ShelfPointMonitorAppUiTest PASS");
     }
 
@@ -447,6 +451,11 @@ public final class ShelfPointMonitorAppUiTest {
                         "手动检测",
                         List.of(),
                         groupEvaluation(GroupAlertStatus.PENDING_ALERT, "观察中：使用位无料，备用位有料 2/4。"));
+                String debugRuntimeText = (String) formatResult.invoke(
+                        app,
+                        "自动检测",
+                        List.of(),
+                        groupEvaluationWithAbnormalPointStatuses());
                 String activeDialogText = (String) alertText.invoke(
                         app,
                         groupEvaluation(GroupAlertStatus.ACTIVE_ALERT, "需关注：请现场确认使用位和备用位。"));
@@ -455,11 +464,109 @@ public final class ShelfPointMonitorAppUiTest {
                         groupEvaluation(GroupAlertStatus.ACKED_ALERT, "已关注：等待现场处理完成。"));
 
                 TestSupport.assertContains(pendingRuntimeText, "观察中", "runtime text should use Chinese pending status");
-                TestSupport.assertContains(activeDialogText, "状态：需关注", "dialog text should use Chinese active status");
-                TestSupport.assertContains(ackedDialogText, "状态：已关注", "dialog text should use Chinese acknowledged status");
+                TestSupport.assertContains(debugRuntimeText, "使用位无料",
+                        "runtime text should use operator material state");
+                TestSupport.assertContains(activeDialogText, "A区 / 一号料架 需要关注",
+                        "dialog text should use operator active status");
+                TestSupport.assertContains(ackedDialogText, "A区 / 一号料架 已关注",
+                        "dialog text should use Chinese acknowledged status");
                 assertNoTechnicalGroupText(pendingRuntimeText, "runtime text");
+                assertNoTechnicalGroupText(debugRuntimeText, "debug runtime text");
                 assertNoTechnicalGroupText(activeDialogText, "active dialog text");
                 assertNoTechnicalGroupText(ackedDialogText, "acknowledged dialog text");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void groupStatusTextUsesOperatorChinese() {
+        TestSupport.assertEquals("正常", GroupStatusText.statusText(GroupAlertStatus.NORMAL),
+                "normal status should be operator Chinese");
+        TestSupport.assertEquals("观察中", GroupStatusText.statusText(GroupAlertStatus.PENDING_ALERT),
+                "pending status should be operator Chinese");
+        TestSupport.assertEquals("需关注", GroupStatusText.statusText(GroupAlertStatus.ACTIVE_ALERT),
+                "active status should be operator Chinese");
+        TestSupport.assertEquals("已关注", GroupStatusText.statusText(GroupAlertStatus.ACKED_ALERT),
+                "acknowledged status should be operator Chinese");
+
+        for (GroupAlertStatus status : GroupAlertStatus.values()) {
+            String text = GroupStatusText.statusText(status);
+            TestSupport.assertFalse(status.name().equals(text), "status text should not return enum name");
+        }
+    }
+
+    private static void groupSummaryDoesNotExposeTechnicalFields() {
+        String summary = GroupStatusText.summary(
+                group("group-001", 300),
+                GroupAlertStatus.ACTIVE_ALERT,
+                true,
+                3,
+                1,
+                121,
+                300,
+                groupEvaluationWithAbnormalPointStatuses().pointStatuses());
+
+        TestSupport.assertContains(summary, "需关注", "summary should use operator status text");
+        TestSupport.assertContains(summary, "使用位无料", "summary should show use point material state");
+        TestSupport.assertContains(summary, "备用位有料 1/3", "summary should show backup material count");
+        assertNoTechnicalGroupText(summary, "group summary");
+    }
+
+    private static void groupAlertTextUsesOperatorLanguageAndListsAbnormalPoints() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Method alertText = ShelfPointMonitorApp.class.getDeclaredMethod(
+                        "groupAlertText",
+                        GroupEvaluation.class);
+                alertText.setAccessible(true);
+
+                String text = (String) alertText.invoke(app, groupEvaluationWithAbnormalPointStatuses());
+
+                TestSupport.assertContains(text, "检测时间：", "dialog should show detection time");
+                TestSupport.assertContains(text, "A区 / 一号料架 需要关注",
+                        "dialog should identify the area and group in operator language");
+                TestSupport.assertContains(text, "物料：标准件", "dialog should show material");
+                TestSupport.assertContains(text, "使用位：无料", "dialog should show use point state");
+                TestSupport.assertContains(text, "备用位：1/3 有料", "dialog should show backup available count");
+                TestSupport.assertContains(text, "持续：3 分钟", "dialog should show rounded duration minutes");
+                TestSupport.assertContains(text, "异常点位列表", "dialog should label abnormal point details");
+                TestSupport.assertContains(text, "使用位 USE_POINT_001 无料 原因：无货架",
+                        "dialog should list empty use point with reason");
+                TestSupport.assertContains(text, "备用位 BACKUP_POINT_002 未查到 原因：未返回记录",
+                        "dialog should list missing backup point with reason");
+                TestSupport.assertNotContains(text, "BACKUP_POINT_001",
+                        "dialog should not list available points as abnormal");
+                TestSupport.assertContains(text, "使用位无料已达到报警时间，请现场确认补料或调度状态。",
+                        "dialog should end with the operator action prompt");
+                assertNoTechnicalGroupText(text, "operator alert text");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void groupAlertDialogButtonsIncludeOpenLogs() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Method buttonsMethod = ShelfPointMonitorApp.class.getDeclaredMethod(
+                        "buildGroupAlertButtons",
+                        GroupEvaluation.class,
+                        Runnable.class);
+                buttonsMethod.setAccessible(true);
+
+                JPanel buttons = (JPanel) buttonsMethod.invoke(
+                        app,
+                        groupEvaluationWithAbnormalPointStatuses(),
+                        (Runnable) () -> { });
+                Set<String> texts = collectVisibleTexts(buttons);
+
+                TestSupport.assertTrue(texts.contains("打开日志目录"),
+                        "group alert dialog should include an open logs button");
+                TestSupport.assertTrue(texts.contains("已关注"),
+                        "group alert dialog should keep the acknowledge button");
             } finally {
                 app.dispose();
             }
@@ -603,6 +710,65 @@ public final class ShelfPointMonitorAppUiTest {
                                 "disabled")),
                 false,
                 "观察中：使用位无料，备用位有料 1/1。");
+    }
+
+    private static GroupEvaluation groupEvaluationWithAbnormalPointStatuses() {
+        return new GroupEvaluation(
+                "group-001",
+                "A区",
+                "一号料架",
+                "标准件",
+                GroupAlertStatus.ACTIVE_ALERT,
+                true,
+                3,
+                1,
+                1,
+                true,
+                121,
+                300,
+                List.of(
+                        new PointStatusView(
+                                "use",
+                                "USE_POINT_001",
+                                "使用位",
+                                PointRole.USE,
+                                true,
+                                PointMaterialStatus.EMPTY,
+                                "",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "无货架"),
+                        new PointStatusView(
+                                "backup-1",
+                                "BACKUP_POINT_001",
+                                "备用位1",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.AVAILABLE,
+                                "SHELF_BACKUP_001",
+                                LocalDateTime.of(2026, 7, 3, 10, 0),
+                                "正常"),
+                        new PointStatusView(
+                                "backup-2",
+                                "BACKUP_POINT_002",
+                                "备用位2",
+                                PointRole.BACKUP,
+                                true,
+                                PointMaterialStatus.MISSING,
+                                "",
+                                null,
+                                "未返回记录"),
+                        new PointStatusView(
+                                "backup-3",
+                                "BACKUP_POINT_003",
+                                "备用位3",
+                                PointRole.BACKUP,
+                                false,
+                                PointMaterialStatus.DISABLED,
+                                "",
+                                null,
+                                "停用")),
+                true,
+                "status=ACTIVE_ALERT useEmpty=true backup=1/3");
     }
 
     private static GroupEvaluation groupEvaluationWithBackupBeforeUsePointStatuses() {
