@@ -185,6 +185,7 @@ group.0.rule.enabled=true
 group.0.rule.requireUsePointEmpty=true
 group.0.rule.minBackupAvailable=3
 group.0.rule.durationMinutes=5
+group.0.rule.backupThresholdParticipates=true
 group.0.point.count=5
 group.0.point.0.id=sample-use-001
 group.0.point.0.code=USE_POINT_001

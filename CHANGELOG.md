@@ -2,6 +2,27 @@
 
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
+## [0.4.0] - 2026-07-04
+
+### Added
+
+- Point status dashboard showing `有料`, `无料`, `未查到`, and `停用`.
+- Per-group check interval.
+- Per-group alert duration.
+- Elapsed-time alert evaluation based on real elapsed time.
+- Chinese operator-facing alert text.
+
+### Changed
+
+- The point shortage page now prioritizes the dashboard over raw runtime logs.
+- Automatic monitoring now checks due groups based on each group's check interval.
+
+### Security
+
+- Database access remains readonly.
+- Passwords remain runtime-only and are not saved.
+- Public package still contains sample point identifiers only.
+
 ## [0.3.0] - 2026-07-01
 
 ### Added

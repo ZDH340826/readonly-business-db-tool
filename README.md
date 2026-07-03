@@ -1,17 +1,19 @@
 # 只读业务数据库工具
 
-当前版本：`0.3.0`
+当前版本：`0.4.0`
 
-这是一个 Windows 本地 Java Swing 工具，用于只读查看业务数据库，并按区域/物料组监控点位缺料风险。它不是通用数据库客户端替代品，不提供 SQL 编辑器，不提供任何数据修改功能。
+这是一个 Windows 本地 Java Swing 只读数据库工具，用于只读查看业务数据库，并按区域/物料组监控点位缺料风险。它不是通用数据库客户端替代品，不提供 SQL 编辑器，不提供任何数据修改功能。
 
 ## 功能
 
 - 连接管理：保存多个连接配置，支持 PostgreSQL 和本地 H2 测试库。
 - 密码策略：密码只在本次运行中输入和使用，不保存到配置文件。
 - 数据库浏览器：只读查看 schema、table/view、column，并预览前 100 行。
+- 点位状态看板：直接展示每个点位的 `有料`、`无料`、`未查到`、`停用` 状态。
 - 点位组缺料报警：按区域、物料组配置 1 个使用位和多个备用位。
-- 自定义报警规则：支持“使用位无货架”“备用位有料数量低于阈值”“持续 N 分钟后报警”。
-- 固定检测周期：系统每 60 秒检测一次点位组。
+- 分组规则：每个点位组独立配置使用位、备用位、备用位下限和是否参与报警判断。
+- 每组检测周期：不同点位组可以设置不同查询周期，自动监控只检测到期组。
+- 持续缺料报警：报警持续时间和检测周期分开配置，按真实经过时间判断是否弹窗。
 - 报警确认：报警窗口必须手动点击“已关注”才会关闭。
 - 日志系统：记录每次检测快照和报警/确认/恢复事件。
 - 本地测试库：无需连接现场数据库即可验证界面、浏览器和报警逻辑。
@@ -33,6 +35,7 @@ SET TRANSACTION READ ONLY;
 - 表预览只执行 `SELECT * FROM schema.table LIMIT 100`。
 - schema/table 名必须通过标识符校验。
 - 点位组监控只查询配置的点位，不写入数据库。
+- 密码只保存在本次运行内存中，不写入 `data/connections.properties` 或发布包。
 
 生产环境仍建议使用数据库只读账号运行。
 
@@ -46,7 +49,7 @@ SET TRANSACTION READ ONLY;
 构建脚本会读取根目录 `VERSION`，生成版本化压缩包：
 
 ```text
-dist/ReadonlyBusinessDbTool-v0.3.0.zip
+dist/ReadonlyBusinessDbTool-v0.4.0.zip
 ```
 
 ## 现场连接配置
@@ -96,15 +99,17 @@ dist/ReadonlyBusinessDbTool-v0.3.0.zip
 
 默认规则：
 
+- 每 1 分钟检测一次该点位组。
 - 使用位无货架。
 - 4 个备用位中至少 3 个需要有货架。
+- 备用位有料下限参与报警判断。
 - 条件持续 5 分钟后报警。
 
 ## 文档
 
 - 使用说明书：[docs/manuals/point-shortage-alert-user-manual.md](docs/manuals/point-shortage-alert-user-manual.md)
 - 版本策略：[docs/VERSIONING.md](docs/VERSIONING.md)
-- 发布说明：[docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)
+- 发布说明：[docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)
 
 ## 版本
 
