@@ -84,6 +84,8 @@ if ($LASTEXITCODE -ne 0) { throw "connection profile tests failed with exit code
 if ($LASTEXITCODE -ne 0) { throw "metadata repository tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorAppUiTest
 if ($LASTEXITCODE -ne 0) { throw "ui layout tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorSelfTestTest
+if ($LASTEXITCODE -ne 0) { throw "self-test validation tests failed with exit code $LASTEXITCODE" }
 
 if (Test-Path $dist) {
     Remove-Item -LiteralPath $dist -Recurse -Force

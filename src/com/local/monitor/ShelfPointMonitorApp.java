@@ -13,6 +13,7 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -26,6 +27,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.regex.Pattern;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -58,6 +61,9 @@ import javax.swing.table.DefaultTableModel;
 
 public final class ShelfPointMonitorApp extends JFrame {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String EXPECTED_SELF_TEST_VERSION = "0.4.0";
+    private static final Pattern PRIVATE_10_NET_PATTERN = Pattern.compile("\\b10(?:\\.\\d{1,3}){3}\\b");
+    private static final Pattern REAL_POINT_CODE_PATTERN = Pattern.compile("\\b\\d{6}BB\\d{6}\\b");
     private static final String PAGE_CONNECTIONS = "连接管理";
     private static final String PAGE_BROWSER = "数据库浏览器";
     private static final String PAGE_ALERTS = "点位缺料报警";
@@ -157,7 +163,14 @@ public final class ShelfPointMonitorApp extends JFrame {
 
     public static void main(String[] args) {
         if (args.length > 0 && "--self-test".equals(args[0])) {
-            System.out.println("ShelfPointMonitor SELF_TEST_OK");
+            try {
+                runSelfTest(resolveSelfTestAppRoot());
+                System.out.println("ShelfPointMonitor SELF_TEST_OK");
+            } catch (Exception ex) {
+                System.err.println("ShelfPointMonitor SELF_TEST_FAILED: " + ex.getMessage());
+                ex.printStackTrace(System.err);
+                System.exit(2);
+            }
             return;
         }
         SwingUtilities.invokeLater(() -> {
@@ -181,6 +194,165 @@ public final class ShelfPointMonitorApp extends JFrame {
         loadProfiles();
         loadGroupConfig();
         appendStatus("程序已启动。密码只保存在本次运行内，不写入配置文件。");
+    }
+
+    static void runSelfTestForTest(Path appRoot) throws Exception {
+        runSelfTest(appRoot);
+    }
+
+    private static Path resolveSelfTestAppRoot() throws Exception {
+        String configured = System.getProperty("shelf.monitor.appRoot");
+        if (configured != null && !configured.isBlank()) {
+            return Path.of(configured).toAbsolutePath().normalize();
+        }
+        Path codeLocation = Path.of(ShelfPointMonitorApp.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation()
+                .toURI());
+        if (Files.isRegularFile(codeLocation)) {
+            return codeLocation.getParent().toAbsolutePath().normalize();
+        }
+        return Path.of("").toAbsolutePath().normalize();
+    }
+
+    private static void runSelfTest(Path appRoot) throws Exception {
+        Path root = appRoot.toAbsolutePath().normalize();
+        requireFile(root.resolve("ShelfPointMonitor.jar"), "packaged application jar");
+        String version = Files.readString(requireFile(root.resolve("VERSION"), "VERSION"), StandardCharsets.UTF_8).trim();
+        if (!EXPECTED_SELF_TEST_VERSION.equals(version)) {
+            throw new IllegalStateException("VERSION must be " + EXPECTED_SELF_TEST_VERSION + ", actual=" + version);
+        }
+
+        requireFile(root.resolve("lib/postgresql-42.2.25.jar"), "PostgreSQL JDBC driver");
+        requireFile(root.resolve("lib/h2-2.2.224.jar"), "H2 JDBC driver");
+        Class.forName("org.postgresql.Driver");
+        Class.forName("org.h2.Driver");
+
+        Path data = requireDirectory(root.resolve("data"), "data directory");
+        Path configPath = requireFile(data.resolve("config.properties"), "data/config.properties");
+        Path connectionsPath = requireFile(data.resolve("connections.properties"), "data/connections.properties");
+        Path groupConfigPath = requireFile(data.resolve("group-config.properties"), "data/group-config.properties");
+
+        Properties configProperties = loadSelfTestProperties(configPath);
+        Properties connectionProperties = loadSelfTestProperties(connectionsPath);
+        Properties groupProperties = loadSelfTestProperties(groupConfigPath);
+        assertNoPasswordProperty(configProperties, "config.properties");
+        assertNoPasswordProperty(connectionProperties, "connections.properties");
+        assertNoPasswordProperty(groupProperties, "group-config.properties");
+        assertNoSensitiveProperties(configProperties, "config.properties");
+        assertNoSensitiveProperties(connectionProperties, "connections.properties");
+        assertNoSensitiveProperties(groupProperties, "group-config.properties");
+
+        ConfigStore.StoredConfig config = new ConfigStore(configPath).load();
+        if (!"__SITE_HOST__".equals(config.host) || !"__SITE_USER__".equals(config.user)) {
+            throw new IllegalStateException("config.properties must use site placeholders");
+        }
+        if (!"data/local-test-db".equals(config.localPath)) {
+            throw new IllegalStateException("config.properties localPath must remain data/local-test-db");
+        }
+        assertSamplePointDefinitions(config.points, "config.properties points");
+
+        ConnectionProfileStore.StoredProfiles profiles = new ConnectionProfileStore(connectionsPath).load();
+        boolean foundPlaceholderProfile = false;
+        boolean foundLocalProfile = false;
+        for (ConnectionProfile profile : profiles.profiles()) {
+            if ("__SITE_HOST__".equals(profile.host()) && "__SITE_USER__".equals(profile.user())) {
+                foundPlaceholderProfile = true;
+            }
+            if ("h2".equals(profile.dbType())) {
+                foundLocalProfile = true;
+            }
+        }
+        if (!foundPlaceholderProfile || !foundLocalProfile) {
+            throw new IllegalStateException("connections.properties must include placeholder and local profiles");
+        }
+
+        List<PointGroupDefinition> groups = new GroupConfigStore(groupConfigPath).load();
+        if (groups.isEmpty()) {
+            throw new IllegalStateException("group-config.properties must include a sample group");
+        }
+        PointGroupDefinition group = groups.get(0);
+        if (!group.rule().backupThresholdParticipates()) {
+            throw new IllegalStateException("sample group must enable backupThresholdParticipates");
+        }
+        assertSampleGroupPoints(group.points(), "group-config.properties points");
+
+        Path localDbPath = root.resolve(config.localPath).normalize();
+        if (!localDbPath.startsWith(root)) {
+            throw new IllegalStateException("local test database path must stay under packaged root");
+        }
+        LocalTestDatabase.reset(DbConfig.localTest(localDbPath.toString(), 30));
+    }
+
+    private static Path requireFile(Path path, String label) {
+        if (!Files.isRegularFile(path)) {
+            throw new IllegalStateException(label + " is missing: " + path);
+        }
+        return path;
+    }
+
+    private static Path requireDirectory(Path path, String label) {
+        if (!Files.isDirectory(path)) {
+            throw new IllegalStateException(label + " is missing: " + path);
+        }
+        return path;
+    }
+
+    private static Properties loadSelfTestProperties(Path path) throws Exception {
+        Properties properties = new Properties();
+        try (InputStream in = Files.newInputStream(path)) {
+            properties.load(new java.io.InputStreamReader(in, StandardCharsets.UTF_8));
+        }
+        return properties;
+    }
+
+    private static void assertNoPasswordProperty(Properties properties, String label) {
+        for (String name : properties.stringPropertyNames()) {
+            if (name.toLowerCase(java.util.Locale.ROOT).contains("password")) {
+                throw new IllegalStateException(label + " must not contain password property: " + name);
+            }
+        }
+    }
+
+    private static void assertNoSensitiveProperties(Properties properties, String label) {
+        for (String name : properties.stringPropertyNames()) {
+            assertNotSensitive(label + "." + name, properties.getProperty(name, ""));
+        }
+    }
+
+    private static void assertNotSensitive(String label, String value) {
+        if (PRIVATE_10_NET_PATTERN.matcher(value).find()) {
+            throw new IllegalStateException(label + " contains private 10.x address");
+        }
+        if (REAL_POINT_CODE_PATTERN.matcher(value).find()) {
+            throw new IllegalStateException(label + " contains real-looking point code");
+        }
+    }
+
+    private static void assertSamplePointDefinitions(List<PointDefinition> points, String label) {
+        if (points.isEmpty()) {
+            throw new IllegalStateException(label + " must not be empty");
+        }
+        for (PointDefinition point : points) {
+            assertSamplePointCode(label, point.code());
+        }
+    }
+
+    private static void assertSampleGroupPoints(List<GroupMonitorPoint> points, String label) {
+        if (points.isEmpty()) {
+            throw new IllegalStateException(label + " must not be empty");
+        }
+        for (GroupMonitorPoint point : points) {
+            assertSamplePointCode(label, point.code());
+        }
+    }
+
+    private static void assertSamplePointCode(String label, String code) {
+        if (!(code.startsWith("USE_POINT_") || code.startsWith("BACKUP_POINT_"))) {
+            throw new IllegalStateException(label + " must use sample point codes, actual=" + code);
+        }
+        assertNotSensitive(label, code);
     }
 
     private void buildUi() {
