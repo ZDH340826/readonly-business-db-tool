@@ -26,6 +26,8 @@ public final class WindowsLauncherScriptTest {
         assertContains(build, "未找到可用的 Java", "脚本必须输出中文运行时错误");
         assertContains(build, "UTF8Encoding]::new($false)", "批处理必须写为 UTF-8 无 BOM");
         assertContains(build, "`r`n", "批处理必须统一为 Windows CRLF 换行");
+        assertContains(build, "Get-FileHash", "构建必须计算发布 ZIP 的 SHA-256");
+        assertContains(build, "SHA256SUMS.txt", "构建必须生成哈希清单");
         assertNotContains(build, "password=", "脚本生成内容不得含密码");
     }
 

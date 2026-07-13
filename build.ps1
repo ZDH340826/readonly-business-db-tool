@@ -326,9 +326,18 @@ Get-ChildItem -LiteralPath (Join-Path $dist 'diagnostics') -Filter 'diagnostic-*
 Get-ChildItem -Path (Join-Path $root 'dist') -Filter '*.zip' -File | Remove-Item -Force
 $zip = Join-Path $root ("dist\ReadonlyBusinessDbTool-v$version.zip")
 Compress-Archive -Path $dist -DestinationPath $zip -Force
+$zipName = [System.IO.Path]::GetFileName($zip)
+$zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
+$hashFile = Join-Path $root 'dist\SHA256SUMS.txt'
+$hashLine = "$zipHash  $zipName"
+[System.IO.File]::WriteAllText($hashFile, $hashLine + "`r`n", [System.Text.Encoding]::ASCII)
+if ((Get-Content -Raw -LiteralPath $hashFile).Trim() -ne $hashLine) {
+    throw "SHA256SUMS.txt verification failed."
+}
 
 Write-Host "Built: $dist"
 Write-Host "Version: $version"
 Write-Host "Zip:   $zip"
+Write-Host "SHA256: $zipHash"
 
 
