@@ -9,8 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 public final class GroupConfigStore {
     private final Path path;
@@ -81,16 +83,47 @@ public final class GroupConfigStore {
         if (groups == null) {
             throw new IllegalArgumentException("groups are required");
         }
+        Set<String> groupIds = new HashSet<>();
         for (PointGroupDefinition group : groups) {
+            if (group.id() == null || group.id().isBlank()) {
+                throw new IllegalArgumentException("点位组 ID 不能为空");
+            }
+            if (!groupIds.add(group.id())) {
+                throw new IllegalArgumentException("点位组 ID 不能重复：" + group.id());
+            }
+            if (group.groupName() == null || group.groupName().isBlank()) {
+                throw new IllegalArgumentException("组名称不能为空：" + group.id());
+            }
+            if (group.checkIntervalSeconds() < 60 || group.checkIntervalSeconds() > 86400) {
+                throw new IllegalArgumentException("检测周期必须在 1 到 1440 分钟之间：" + group.id());
+            }
+            if (group.rule().durationMinutes() < 1 || group.rule().durationMinutes() > 1440) {
+                throw new IllegalArgumentException("报警持续时间必须在 1 到 1440 分钟之间：" + group.id());
+            }
             int backupCount = 0;
+            int useCount = 0;
+            Set<String> pointCodes = new HashSet<>();
             for (GroupMonitorPoint point : group.points()) {
+                if (point.enabled() && point.role() == PointRole.USE) {
+                    useCount++;
+                }
                 if (point.enabled() && point.role() == PointRole.BACKUP) {
                     backupCount++;
                 }
+                if (point.enabled()) {
+                    if (point.code() == null || point.code().isBlank()) {
+                        throw new IllegalArgumentException("启用点位编码不能为空：" + group.id());
+                    }
+                    if (!pointCodes.add(point.code())) {
+                        throw new IllegalArgumentException("同组点位编码不能重复：" + group.id() + " / " + point.code());
+                    }
+                }
+            }
+            if (group.enabled() && useCount == 0) {
+                throw new IllegalArgumentException("启用组至少需要一个启用的使用位：" + group.id());
             }
             if (group.rule().minBackupAvailable() > backupCount) {
-                throw new IllegalArgumentException("minBackupAvailable cannot exceed backup point count for "
-                        + group.id());
+                throw new IllegalArgumentException("备用位最小可用数量不得超过启用备用位数量：" + group.id());
             }
         }
     }

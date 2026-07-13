@@ -25,6 +25,7 @@ import javax.swing.AbstractButton;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -37,7 +38,10 @@ import javax.swing.border.TitledBorder;
 
 public final class ShelfPointMonitorAppUiTest {
     public static void main(String[] args) throws Exception {
-        appHasThreeNavigationPages();
+        appHasFinalNavigationPages();
+        finalNavigationPagesCanSwitchAndAreNotBlank();
+        finalShellHasRequiredStatusBarsAndSize();
+        finalLayoutsExposeAcceptanceStructure();
         connectionPageUsesChineseOperatorLabels();
         alertPageContainsGroupPointTable();
         groupCheckIntervalFieldExists();
@@ -54,6 +58,8 @@ public final class ShelfPointMonitorAppUiTest {
         queryFailureClosesActiveDialogForSameGroupOnly();
         queryFailureDoesNotCloseDialogForOtherGroup();
         queryFailureEventsAreDeduplicatedAndSanitized();
+        recoveredFilterDoesNotShowNeverAlertedNormalGroup();
+        alertCenterActionsUseGroupIdWhenNamesCollide();
         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
         gridBagPanelsDoNotOverlapCells();
         groupStatusTextUsesOperatorChinese();
@@ -65,16 +71,90 @@ public final class ShelfPointMonitorAppUiTest {
         System.out.println("ShelfPointMonitorAppUiTest PASS");
     }
 
-    private static void appHasThreeNavigationPages() throws Exception {
+    private static void appHasFinalNavigationPages() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
             try {
                 JList<?> navigation = findFirst(app.getContentPane(), JList.class);
                 TestSupport.assertTrue(navigation != null, "app should have a navigation list");
-                TestSupport.assertEquals(3, navigation.getModel().getSize(), "app should have three navigation pages");
-                TestSupport.assertEquals("连接管理", navigation.getModel().getElementAt(0), "first page should be connection management");
-                TestSupport.assertEquals("数据库浏览器", navigation.getModel().getElementAt(1), "second page should be database browser");
-                TestSupport.assertEquals("点位缺料报警", navigation.getModel().getElementAt(2), "third page should be point alert");
+                List<String> expected = List.of(
+                        "监控总览",
+                        "点位组管理",
+                        "报警中心",
+                        "连接管理",
+                        "数据查询",
+                        "数据源浏览器",
+                        "日志与系统",
+                        "系统设置");
+                TestSupport.assertEquals(expected.size(), navigation.getModel().getSize(),
+                        "app should have eight final navigation pages");
+                for (int i = 0; i < expected.size(); i++) {
+                    TestSupport.assertEquals(expected.get(i), navigation.getModel().getElementAt(i),
+                            "navigation item order should match final UI spec at index " + i);
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void finalNavigationPagesCanSwitchAndAreNotBlank() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                String[] requiredTexts = {
+                        "监控点位组",
+                        "验证配置",
+                        "活跃报警",
+                        "数据库访问模式：只读",
+                        "点位编码关键字：",
+                        "预览前100行",
+                        "执行自检",
+                        "保存设置"
+                };
+                for (int i = 0; i < navigation.getModel().getSize(); i++) {
+                    navigation.setSelectedIndex(i);
+                    Set<String> texts = collectVisibleTexts(app.getContentPane());
+                    TestSupport.assertTrue(texts.contains(requiredTexts[i]),
+                            "page should expose real visible content for " + navigation.getModel().getElementAt(i));
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void finalShellHasRequiredStatusBarsAndSize() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                TestSupport.assertTrue(app.getMinimumSize().width >= 1180, "minimum width should be at least 1180");
+                TestSupport.assertTrue(app.getMinimumSize().height >= 760, "minimum height should be at least 760");
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("监控状态：未运行"), "top status bar should show monitor status");
+                TestSupport.assertTrue(texts.contains("上次检测：--"), "top status bar should show last check");
+                TestSupport.assertTrue(texts.contains("下次检测：--"), "top status bar should show next check");
+                TestSupport.assertTrue(texts.contains("就绪"), "bottom status bar should show runtime status");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void finalLayoutsExposeAcceptanceStructure() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("基本信息"), "group management should expose basic info panel");
+                TestSupport.assertTrue(texts.contains("报警规则"), "group management should expose rule panel");
+                TestSupport.assertTrue(texts.contains("Schema / 表 / 视图对象树"),
+                        "browser should expose object tree panel");
+                TestSupport.assertTrue(texts.contains("对象元数据与列信息"),
+                        "browser should expose metadata panel");
+                TestSupport.assertTrue(texts.contains("前 100 行只读预览"),
+                        "browser should expose preview panel");
             } finally {
                 app.dispose();
             }
@@ -108,7 +188,7 @@ public final class ShelfPointMonitorAppUiTest {
                 TestSupport.assertTrue(texts.contains("密码："), "connection page should show Chinese password label");
                 TestSupport.assertTrue(texts.contains("SSL模式："), "connection page should show Chinese SSL label");
                 TestSupport.assertTrue(texts.contains("新建连接"), "connection page should show Chinese new button");
-                TestSupport.assertTrue(texts.contains("测试连接并使用"), "connection page should show Chinese test button");
+                TestSupport.assertTrue(texts.contains("测试连接"), "connection page should show Chinese test button");
             } finally {
                 app.dispose();
             }
@@ -536,10 +616,10 @@ public final class ShelfPointMonitorAppUiTest {
             ShelfPointMonitorApp app = appRef[0];
             List<String> unsafeMessages = List.of(
                     "FATAL: password authentication failed for user \"readonly_user\"",
-                    "Access denied for user 'readonly_user'@'192.0.2.10'",
+                    "Access denied for user 'readonly_user'@'192.0.2.88'",
                     "role \"readonly_user\" does not exist",
                     "uid=readonly_user password=Secret-123",
-                    "jdbc:postgresql://192.0.2.10:2345/cms_web?user=readonly_user&password=Secret-123",
+                    "jdbc:postgresql://192.0.2.88:2345/cms_web?user=readonly_user&password=Secret-123",
                     "at com.local.monitor.PointRepository.fetch(PointRepository.java:24)");
             for (int i = 0; i < unsafeMessages.size(); i++) {
                 String unsafeMessage = unsafeMessages.get(i);
@@ -574,6 +654,65 @@ public final class ShelfPointMonitorAppUiTest {
             shutdownExecutor(appRef[0]);
             runOnEdtAndWait(() -> appRef[0].dispose());
         }
+    }
+
+    private static void recoveredFilterDoesNotShowNeverAlertedNormalGroup() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition group = group("normal-never-alerted", 60);
+                setField(app, "pointGroups", new ArrayList<>(List.of(group)));
+                @SuppressWarnings("unchecked")
+                Map<String, GroupEvaluation> evaluations =
+                        (Map<String, GroupEvaluation>) fieldValue(app, "lastGroupEvaluations", Map.class);
+                evaluations.put(group.id(), evaluation(group.id(), GroupAlertStatus.NORMAL, "正常"));
+
+                JComboBox<?> filter = fieldValue(app, "alertCenterFilterBox", JComboBox.class);
+                filter.setSelectedItem("已恢复");
+                invoke(app, "refreshAlertCenterPage", new Class<?>[0]);
+
+                JTable table = fieldValue(app, "alertCenterTable", JTable.class);
+                TestSupport.assertEquals(0, table.getRowCount(),
+                        "normal groups that never emitted RECOVERED must not appear in recovered filter");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void alertCenterActionsUseGroupIdWhenNamesCollide() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition groupA = groupWithNames("group-A", "同区域", "同组名");
+                PointGroupDefinition groupB = groupWithNames("group-B", "同区域", "同组名");
+                setField(app, "pointGroups", new ArrayList<>(List.of(groupA, groupB)));
+                @SuppressWarnings("unchecked")
+                Map<String, GroupEvaluation> evaluations =
+                        (Map<String, GroupEvaluation>) fieldValue(app, "lastGroupEvaluations", Map.class);
+                evaluations.put(groupA.id(), evaluation(groupA.id(), GroupAlertStatus.ACTIVE_ALERT, "A报警"));
+                evaluations.put(groupB.id(), evaluation(groupB.id(), GroupAlertStatus.ACTIVE_ALERT, "B报警"));
+
+                JComboBox<?> filter = fieldValue(app, "alertCenterFilterBox", JComboBox.class);
+                filter.setSelectedItem("活跃报警");
+                invoke(app, "refreshAlertCenterPage", new Class<?>[0]);
+
+                JTable table = fieldValue(app, "alertCenterTable", JTable.class);
+                TestSupport.assertEquals(2, table.getRowCount(), "test setup should expose two active rows");
+                table.setRowSelectionInterval(1, 1);
+                invoke(app, "acknowledgeSelectedAlertCenterGroup", new Class<?>[0]);
+
+                @SuppressWarnings("unchecked")
+                Map<String, GroupAlertStatus> statuses =
+                        (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+                TestSupport.assertEquals(GroupAlertStatus.ACKED_ALERT, statuses.get("group-B"),
+                        "acknowledge should target selected row groupId");
+                TestSupport.assertTrue(!GroupAlertStatus.ACKED_ALERT.equals(statuses.get("group-A")),
+                        "acknowledge must not target the first group with the same area/name");
+            } finally {
+                app.dispose();
+            }
+        });
     }
 
     private static void checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush() throws Exception {
@@ -1140,6 +1279,37 @@ public final class ShelfPointMonitorAppUiTest {
                 new GroupAlertRule(true, true, 1, 5));
     }
 
+    private static PointGroupDefinition groupWithNames(String id, String areaName, String groupName) {
+        return new PointGroupDefinition(
+                id,
+                areaName,
+                groupName,
+                "Material A",
+                true,
+                60,
+                List.of(
+                        new GroupMonitorPoint(id + "-use", "USE_POINT_" + id, "Use", PointRole.USE, true, 1),
+                        new GroupMonitorPoint(id + "-backup", "BACKUP_POINT_" + id, "Backup", PointRole.BACKUP, true, 2)),
+                new GroupAlertRule(true, true, 1, 5));
+    }
+
+    private static GroupEvaluation evaluation(String groupId, GroupAlertStatus status, String message) {
+        return new GroupEvaluation(
+                groupId,
+                "同区域",
+                "同组名",
+                "Material A",
+                status,
+                status == GroupAlertStatus.ACTIVE_ALERT,
+                1,
+                0,
+                1,
+                status == GroupAlertStatus.ACTIVE_ALERT,
+                status == GroupAlertStatus.ACTIVE_ALERT ? 5 : 0,
+                status == GroupAlertStatus.ACTIVE_ALERT,
+                message);
+    }
+
     private static List<PointRecord> healthyRecords() {
         return List.of(
                 record("USE_POINT_001", "SHELF_USE_001", 1, 0),
@@ -1215,7 +1385,7 @@ public final class ShelfPointMonitorAppUiTest {
         TestSupport.assertContains(text, "查询失败", context + " should retain useful failure category");
         TestSupport.assertNotContains(text, "readonly_user", context + " must not contain database username");
         TestSupport.assertNotContains(text, "Secret-123", context + " must not contain password");
-        TestSupport.assertNotContains(text, "jdbc:postgresql://192.0.2.10:2345/cms_web",
+        TestSupport.assertNotContains(text, "jdbc:postgresql://192.0.2.88:2345/cms_web",
                 context + " must not contain full JDBC URL");
         TestSupport.assertNotContains(text, "PointRepository.java:24",
                 context + " must not contain stack trace location");
