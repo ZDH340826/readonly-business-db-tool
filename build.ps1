@@ -106,6 +106,10 @@ if ($LASTEXITCODE -ne 0) { throw "logs and settings page tests failed with exit 
 if ($LASTEXITCODE -ne 0) { throw "field delivery scenario tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.WindowsPathPackagingTest
 if ($LASTEXITCODE -ne 0) { throw "Windows path packaging tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.FieldDeploymentPreflightTest
+if ($LASTEXITCODE -ne 0) { throw "field deployment preflight tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.WindowsLauncherScriptTest
+if ($LASTEXITCODE -ne 0) { throw "Windows launcher script tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionTest
 if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionRaceTest
@@ -130,7 +134,7 @@ if ($LASTEXITCODE -ne 0) { throw "self-test validation tests failed with exit co
 if (Test-Path $dist) {
     Remove-Item -LiteralPath $dist -Recurse -Force
 }
-New-Item -ItemType Directory -Force -Path $dist, (Join-Path $dist 'lib'), (Join-Path $dist 'data'), (Join-Path $dist 'logs') | Out-Null
+New-Item -ItemType Directory -Force -Path $dist, (Join-Path $dist 'lib'), (Join-Path $dist 'data'), (Join-Path $dist 'logs'), (Join-Path $dist 'diagnostics') | Out-Null
 Set-Content -Encoding ASCII -Path (Join-Path $dist 'VERSION') -Value $version
 
 & $jar --create --file (Join-Path $dist 'ShelfPointMonitor.jar') --main-class com.local.monitor.ShelfPointMonitorApp -C $classes .
@@ -138,6 +142,9 @@ if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
 Copy-Item -LiteralPath $driverJar -Destination (Join-Path $dist 'lib\postgresql-42.2.25.jar') -Force
 Copy-Item -LiteralPath $h2Jar -Destination (Join-Path $dist 'lib\h2-2.2.224.jar') -Force
 
+if ($version -match '-rc' -and !$jlinkPath) {
+    throw "RC packaging requires jlink so the field package has an embedded runtime."
+}
 if ($jlinkPath) {
     & $jlinkPath `
         --add-modules java.desktop,java.sql,java.naming,java.logging,java.management,java.security.sasl,jdk.crypto.ec,jdk.charsets `
@@ -151,56 +158,68 @@ if ($jlinkPath) {
 @'
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'ShelfPointMonitor.bat')
+if not exist "%JAVA_EXE%" (
+  where java >nul 2>nul
+  if errorlevel 1 (
+    echo [失败] 未找到可用的 Java，请确认发布包完整。
+    endlocal & exit /b 2
+  )
+  set "JAVA_EXE=java"
+)
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp %*
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
+'@ | Set-Content -Encoding UTF8 -Path (Join-Path $dist '启动工具.bat')
 
 @'
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_Reset.bat')
+if not exist "%JAVA_EXE%" (
+  where java >nul 2>nul
+  if errorlevel 1 (
+    echo [失败] 未找到可用的 Java，请确认发布包完整。
+    endlocal & exit /b 2
+  )
+  set "JAVA_EXE=java"
+)
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.FieldDeploymentPreflight "%~dp0."
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
+'@ | Set-Content -Encoding UTF8 -Path (Join-Path $dist '现场部署检查.bat')
 
 @'
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool normal
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_Normal.bat')
+if not exist "%JAVA_EXE%" (
+  where java >nul 2>nul
+  if errorlevel 1 (
+    echo [失败] 未找到可用的 Java，请确认发布包完整。
+    endlocal & exit /b 2
+  )
+  set "JAVA_EXE=java"
+)
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.DiagnosticBundleTool "%~dp0."
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
+'@ | Set-Content -Encoding UTF8 -Path (Join-Path $dist '生成诊断包.bat')
 
-@'
-@echo off
-setlocal
-cd /d "%~dp0"
-set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool missing-use
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_MissingUse.bat')
-
-@'
-@echo off
-setlocal
-cd /d "%~dp0"
-set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool missing-backup
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_MissingBackup.bat')
+foreach ($scriptPath in @(
+        (Join-Path $dist '启动工具.bat'),
+        (Join-Path $dist '现场部署检查.bat'),
+        (Join-Path $dist '生成诊断包.bat'))) {
+    $scriptText = [System.IO.File]::ReadAllText($scriptPath, [System.Text.Encoding]::UTF8)
+    $scriptText = $scriptText -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText($scriptPath, $scriptText, [System.Text.UTF8Encoding]::new($false))
+}
 
 @'
 host=__SITE_HOST__
@@ -292,6 +311,14 @@ if (!(Test-Path $runtimeJava)) {
 }
 & $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset (Join-Path $dist 'data\local-test-db')
 if ($LASTEXITCODE -ne 0) { throw "local test database creation failed with exit code $LASTEXITCODE" }
+
+& $runtimeJava "-Dshelf.monitor.appRoot=$dist" -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp --self-test
+if ($LASTEXITCODE -ne 0) { throw "packaged self-test failed with exit code $LASTEXITCODE" }
+& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.FieldDeploymentPreflight $dist
+if ($LASTEXITCODE -ne 0) { throw "packaged preflight failed with exit code $LASTEXITCODE" }
+& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.DiagnosticBundleTool $dist
+if ($LASTEXITCODE -ne 0) { throw "packaged diagnostic tool failed with exit code $LASTEXITCODE" }
+Get-ChildItem -LiteralPath (Join-Path $dist 'diagnostics') -Filter 'diagnostic-*.zip' -File | Remove-Item -Force
 
 Get-ChildItem -Path (Join-Path $root 'dist') -Filter '*.zip' -File | Remove-Item -Force
 $zip = Join-Path $root ("dist\ReadonlyBusinessDbTool-v$version.zip")
