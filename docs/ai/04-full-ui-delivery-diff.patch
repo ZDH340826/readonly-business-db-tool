@@ -1,0 +1,3450 @@
+﻿diff --git a/.gitignore b/.gitignore
+index 1f16ab8..eba1b1d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -7,6 +7,7 @@
+ # Runtime state
+ /logs/
+ /data/
++/diagnostics/
+ *.log
+ *.mv.db
+ *.trace.db
+@@ -25,6 +26,7 @@ group-config.properties
+ Thumbs.db
+ .idea/
+ .vscode/
++.obsidian/
+ *.iml
+
+ # Java artifacts
+diff --git a/build.ps1 b/build.ps1
+index 97beb77..120c79f 100644
+--- a/build.ps1
++++ b/build.ps1
+@@ -82,6 +82,10 @@ if ($LASTEXITCODE -ne 0) { throw "group log writer tests failed with exit code $
+ if ($LASTEXITCODE -ne 0) { throw "connection profile tests failed with exit code $LASTEXITCODE" }
+ & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DbMetadataRepositoryTest
+ if ($LASTEXITCODE -ne 0) { throw "metadata repository tests failed with exit code $LASTEXITCODE" }
++& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PointDataQueryRepositoryTest
++if ($LASTEXITCODE -ne 0) { throw "point data query tests failed with exit code $LASTEXITCODE" }
++& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.UiPreferencesStoreTest
++if ($LASTEXITCODE -ne 0) { throw "ui preferences tests failed with exit code $LASTEXITCODE" }
+ & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorAppUiTest
+ if ($LASTEXITCODE -ne 0) { throw "ui layout tests failed with exit code $LASTEXITCODE" }
+ & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorSelfTestTest
+diff --git a/docs/ai/04-full-ui-delivery-report.md b/docs/ai/04-full-ui-delivery-report.md
+new file mode 100644
+index 0000000..862b5b9
+--- /dev/null
++++ b/docs/ai/04-full-ui-delivery-report.md
+@@ -0,0 +1,191 @@
++# 1. UI 架构与新增类说明
++
++本轮在保留入口 `com.local.monitor.ShelfPointMonitorApp` 的前提下，将应用外壳改为 8 页 `CardLayout` 桌面 UI。窗口最小尺寸调整为 `1180 x 760`，左侧固定导航，顶部显示当前连接、监控状态、上次检测、下次检测，底部显示运行状态。
++
++新增类：
++
++| 文件 | 类 | 作用 |
++|---|---|---|
++| `src/com/local/monitor/UiPreferences.java` | `UiPreferences` | 本地 UI 偏好模型，包含默认首页、总览刷新间隔、弹窗/声音、日志保留、显示密度、自检和自动清理设置。 |
++| `src/com/local/monitor/UiPreferencesStore.java` | `UiPreferencesStore` | 读写 `data/ui-settings.properties`，不保存密码和数据库机密。 |
++| `src/com/local/monitor/PointDataQuery.java` | `PointDataQuery` | 固定来源表 `tcs_map_data` 的结构化只读查询条件与 SELECT 模板。 |
++| `src/com/local/monitor/PointDataQueryRepository.java` | `PointDataQueryRepository` | 通过 `ReadOnlyConnectionFactory` 执行参数化 SELECT 查询。 |
++| `src/com/local/monitor/PointDataQueryResult.java` | `PointDataQueryResult` | 返回查询结果、SQL 类型和 SQL 模板。 |
++
++修改类：
++
++| 文件 | 主要变化 |
++|---|---|
++| `src/com/local/monitor/ShelfPointMonitorApp.java` | 落地 8 页 UI、顶部/底部状态栏、总览/报警中心/日志/设置/数据查询页面、查询结果刷新和偏好设置生效逻辑。 |
++| `src/com/local/monitor/ColumnInfo.java` | 增加默认值、备注字段。 |
++| `src/com/local/monitor/DbMetadataRepository.java` | 元数据读取增加 `COLUMN_DEF` 与 `REMARKS`。 |
++| `src/com/local/monitor/GroupConfigStore.java` | 增强点位组保存前校验。 |
++
++# 2. 八个页面分别实现了什么真实功能
++
++| 页面 | 已实现功能 |
++|---|---|
++| 监控总览 | 统计监控点位组、缺料报警、观察中、数据异常；显示点位组监控表；右侧显示规则、持续时间、上次检测和点位明细；支持开始/停止监控、立即检测、查看报警详情、已关注。 |
++| 点位组管理 | 复用现有点位组配置模型；支持新增/删除组、新增/删除点位、保存配置、放弃修改、验证配置、开始/停止监控、立即检测；继续展示点位状态看板。 |
++| 报警中心 | 显示活跃报警、已关注、观察中、查询失败、已恢复；读取本次运行评估和本地 `event-log.csv`；支持标记已关注、查看点位详情、立即检测该组、查看连接状态。 |
++| 连接管理 | 保留连接列表、配置表单、保存/删除/测试功能；新增只读安全说明和“设为当前连接”；密码仍只保存在运行内存。 |
++| 数据查询 | 固定查询 `schema.tcs_map_data`；支持点位编码、货架编号、区域、关联区域、更新时间起止、行数上限；结果表和详情面板只读；不提供 SQL 编辑器。 |
++| 数据源浏览器 | 保留 Schema 刷新、表/视图加载、字段元数据、前 100 行预览；新增统计卡片；字段元数据包含列名、类型、长度、可空、默认值、备注。 |
++| 日志与系统 | 显示健康卡片；读取本地 `event-log.csv`、`check-log.csv`、`monitor.log`；支持事件类型、时间范围、点位组、关键字筛选；支持打开日志目录、执行自检、导出诊断信息。 |
++| 系统设置 | 支持默认首页、总览刷新间隔、报警弹窗、声音提示、日志保留天数、显示密度、启动自检、日志自动清理；固定显示不可关闭的只读和脱敏安全项。 |
++
++# 3. 页面对应的业务模型或新增安全查询模型
++
++| 页面 | 对应模型 |
++|---|---|
++| 监控总览 | `PointGroupDefinition`、`GroupEvaluation`、`GroupRuntimeState`、`GroupStatusText`。 |
++| 点位组管理 | `GroupConfigStore`、`PointGroupDefinition`、`GroupMonitorPoint`、`GroupAlertRule`。 |
++| 报警中心 | `GroupEvaluation`、`GroupLogWriter` 写出的 `event-log.csv`。 |
++| 连接管理 | `ConnectionProfile`、`ConnectionProfileStore`、`ReadOnlyConnectionFactory`。 |
++| 数据查询 | 新增 `PointDataQuery`、`PointDataQueryRepository`、`PointDataQueryResult`。 |
++| 数据源浏览器 | `DbMetadataRepository`、`SchemaInfo`、`TableInfo`、`ColumnInfo`、`TablePreview`。 |
++| 日志与系统 | `GroupLogWriter` 本地 CSV、`monitor.log`、`ShelfPointMonitorApp.runSelfTest`。 |
++| 系统设置 | 新增 `UiPreferences`、`UiPreferencesStore`。 |
++
++# 4. 仍未实现的设计项
++
++无。
++
++说明：数据查询“导出当前结果”为可选项，因需求允许无法安全完成时不显示按钮，本轮未展示导出按钮。
++
++# 5. 新增或修改的测试
++
++新增：
++
++| 测试 | 覆盖 |
++|---|---|
++| `test/com/local/monitor/PointDataQueryRepositoryTest.java` | 固定 `tcs_map_data` 只读查询、参数化条件、非法 schema 拒绝、SQL 不包含写入/DDL 关键字。 |
++| `test/com/local/monitor/UiPreferencesStoreTest.java` | UI 偏好保存、加载、恢复默认、非法默认页/刷新间隔/保留天数/显示密度拒绝。 |
++
++扩展：
++
++| 测试 | 覆盖 |
++|---|---|
++| `ShelfPointMonitorAppUiTest` | 8 个导航页面、页面非空、顶部/底部状态栏、最终连接按钮文案、查询失败显示、日志脱敏、原有点位组 UI 行为。 |
++| `GroupConfigStoreTest` | 点位组 ID 唯一、组名、使用位、重复点位、检测周期、报警持续时间等校验。 |
++| `DbMetadataRepositoryTest` | 既有元数据和预览只读能力仍通过。 |
++
++# 6. 数据查询的 SQL 安全边界
++
++`PointDataQuery.fixedSelectSql(schema)` 只生成固定 SELECT：
++
++```sql
++select ... from <schema>.tcs_map_data
++where (? = '' or lower(map_data_code) like lower(?))
++...
++limit ? offset ?
++```
++
++边界：
++
++* schema 通过 `PointQuery.validateIdentifier` 校验；
++* 表名固定为 `tcs_map_data`，用户不能输入表名、SQL、字段表达式或排序表达式；
++* 所有过滤值通过 `PreparedStatement` 参数传入；
++* 查询通过 `ReadOnlyConnectionFactory.open` 创建连接；
++* 设置查询超时 `ps.setQueryTimeout(8)`；
++* 行数限制在 `1..500`；
++* 不新增 INSERT、UPDATE、DELETE、DDL；
++* 本地 H2 测试库写入仍只存在于 `LocalTestDatabase`，用于测试库初始化/场景切换，不属于生产数据库访问路径。
++
++# 7. 系统设置的实际生效行为
++
++| 设置 | 生效方式 |
++|---|---|
++| 默认首页 | 保存到 `data/ui-settings.properties`，下次启动通过 `selectDefaultPage()` 选择。 |
++| 监控总览自动刷新间隔 | 重启 Swing `Timer`，按配置刷新总览表。 |
++| 报警弹窗启用 | 检测命中报警时决定是否调用 `showGroupAlertDialog`；关闭后仍写日志和状态。 |
++| 报警声音提示 | 弹窗前调用系统 `Toolkit.beep()`。 |
++| 日志保留天数 | 自动清理开启时删除超过保留天数的本地日志文件。 |
++| 界面显示密度 | 调整主要表格行高。 |
++| 启动时执行自检 | 启动后后台执行 `runSelfTest`。 |
++| 日志自动清理 | 保存/加载偏好后触发 `cleanupOldLogs()`。 |
++
++# 8. 构建结果、退出码、git diff --check 输出
++
++构建命令：
++
++```powershell
++.\build.ps1
++```
++
++退出码：`0`
++
++最终输出摘要：
++
++```text
++MonitorLogicTest PASS
++GroupMonitorLogicTest PASS
++GroupCheckPlannerTest PASS
++PointStatusMapperTest PASS
++LocalTestDatabaseTest PASS
++PointScheduleTest PASS
++ConfigStoreTest PASS
++GroupConfigStoreTest PASS
++GroupLogWriterTest PASS
++ConnectionProfileStoreTest PASS
++DbMetadataRepositoryTest PASS
++PointDataQueryRepositoryTest PASS
++UiPreferencesStoreTest PASS
++ShelfPointMonitorAppUiTest PASS
++ShelfPointMonitorSelfTestTest PASS
++local test database reset: <PROJECT_ROOT>\dist\ShelfPointMonitor\data\local-test-db
++Built: <PROJECT_ROOT>\dist\ShelfPointMonitor
++Version: 0.4.0
++Zip:   <PROJECT_ROOT>\dist\ReadonlyBusinessDbTool-v0.4.0.zip
++```
++
++`git diff --check` 退出码：`0`
++
++输出：
++
++```text
++warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
++warning: in the working copy of 'build.ps1', LF will be replaced by CRLF the next time Git touches it
++warning: in the working copy of 'src/com/local/monitor/ColumnInfo.java', CRLF will be replaced by LF the next time Git touches it
++warning: in the working copy of 'src/com/local/monitor/DbMetadataRepository.java', CRLF will be replaced by LF the next time Git touches it
++```
++
++# 9. git status --short 完整输出
++
++```text
++ M .gitignore
++ M build.ps1
++ A docs/ai/04-full-ui-delivery-report.md
++ M src/com/local/monitor/ColumnInfo.java
++ M src/com/local/monitor/DbMetadataRepository.java
++ M src/com/local/monitor/GroupAlertStatus.java
++ M src/com/local/monitor/GroupConfigStore.java
++ M src/com/local/monitor/GroupMonitorLogic.java
++ M src/com/local/monitor/GroupRuntimeState.java
++ M src/com/local/monitor/GroupStatusText.java
++ A src/com/local/monitor/PointDataQuery.java
++ A src/com/local/monitor/PointDataQueryRepository.java
++ A src/com/local/monitor/PointDataQueryResult.java
++ M src/com/local/monitor/ShelfPointMonitorApp.java
++ A src/com/local/monitor/UiPreferences.java
++ A src/com/local/monitor/UiPreferencesStore.java
++ M test/com/local/monitor/GroupConfigStoreTest.java
++ M test/com/local/monitor/GroupMonitorLogicTest.java
++ A test/com/local/monitor/PointDataQueryRepositoryTest.java
++ M test/com/local/monitor/ShelfPointMonitorAppUiTest.java
++ A test/com/local/monitor/UiPreferencesStoreTest.java
++?? docs/ai/01-project-baseline.md
++?? docs/ai/02-query-failure-diff.patch
++?? docs/ai/02-query-failure-implementation.md
++?? docs/ai/04-full-ui-delivery-diff.patch
++```
++
++说明：`A` 为 `git add -N` 的 intent-to-add，用于让指定 `git diff --no-ext-diff -- src test docs build.ps1 .gitignore VERSION CHANGELOG.md` 包含新增源码、新增测试和本交付报告；未提交，未加入构建产物、日志、本地配置或 H2 数据库文件。
++
++# 10. 未确认的现场风险
++
++* 未连接真实 PostgreSQL，无法证明现场网络断开、账号权限不足、数据库慢查询时的完整 UI 体验。
++* `COLUMN_DEF`、`REMARKS` 是否能由现场 PostgreSQL JDBC 元数据返回，需现场验证。
++* 日志自动清理遇到被其他程序占用的日志文件时，本地只做忽略处理，现场需要观察是否满足运维习惯。
++* 结构化查询固定 `tcs_map_data` 和公开字段名；若现场表结构变化，需要更新映射，但仍应保持只读和参数化。
++* 本轮没有做像素级截图测试，Swing 组件级测试已覆盖 8 页构建和关键文案。
+diff --git a/src/com/local/monitor/ColumnInfo.java b/src/com/local/monitor/ColumnInfo.java
+index 2602cb7..6e09227 100644
+--- a/src/com/local/monitor/ColumnInfo.java
++++ b/src/com/local/monitor/ColumnInfo.java
+@@ -5,12 +5,20 @@ public final class ColumnInfo {
+     private final String typeName;
+     private final int size;
+     private final boolean nullable;
++    private final String defaultValue;
++    private final String remarks;
+
+     public ColumnInfo(String name, String typeName, int size, boolean nullable) {
++        this(name, typeName, size, nullable, "", "");
++    }
++
++    public ColumnInfo(String name, String typeName, int size, boolean nullable, String defaultValue, String remarks) {
+         this.name = name;
+         this.typeName = typeName;
+         this.size = size;
+         this.nullable = nullable;
++        this.defaultValue = defaultValue == null ? "" : defaultValue;
++        this.remarks = remarks == null ? "" : remarks;
+     }
+
+     public String name() {
+@@ -28,6 +36,14 @@ public final class ColumnInfo {
+     public boolean nullable() {
+         return nullable;
+     }
++
++    public String defaultValue() {
++        return defaultValue;
++    }
++
++    public String remarks() {
++        return remarks;
++    }
+ }
+
+
+diff --git a/src/com/local/monitor/DbMetadataRepository.java b/src/com/local/monitor/DbMetadataRepository.java
+index 164b0f8..55677ee 100644
+--- a/src/com/local/monitor/DbMetadataRepository.java
++++ b/src/com/local/monitor/DbMetadataRepository.java
+@@ -73,7 +73,9 @@ public final class DbMetadataRepository {
+                                         columnName,
+                                         rs.getString("TYPE_NAME"),
+                                         rs.getInt("COLUMN_SIZE"),
+-                                        rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable));
++                                        rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable,
++                                        rs.getString("COLUMN_DEF"),
++                                        rs.getString("REMARKS")));
+                             }
+                         }
+                     }
+diff --git a/src/com/local/monitor/GroupAlertStatus.java b/src/com/local/monitor/GroupAlertStatus.java
+index fd06811..01cca8f 100644
+--- a/src/com/local/monitor/GroupAlertStatus.java
++++ b/src/com/local/monitor/GroupAlertStatus.java
+@@ -4,5 +4,6 @@ public enum GroupAlertStatus {
+     NORMAL,
+     PENDING_ALERT,
+     ACTIVE_ALERT,
+-    ACKED_ALERT
++    ACKED_ALERT,
++    QUERY_FAILED
+ }
+diff --git a/src/com/local/monitor/GroupConfigStore.java b/src/com/local/monitor/GroupConfigStore.java
+index 28e5fcb..83246f6 100644
+--- a/src/com/local/monitor/GroupConfigStore.java
++++ b/src/com/local/monitor/GroupConfigStore.java
+@@ -9,8 +9,10 @@ import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.util.ArrayList;
++import java.util.HashSet;
+ import java.util.List;
+ import java.util.Properties;
++import java.util.Set;
+
+ public final class GroupConfigStore {
+     private final Path path;
+@@ -81,12 +83,44 @@ public final class GroupConfigStore {
+         if (groups == null) {
+             throw new IllegalArgumentException("groups are required");
+         }
++        Set<String> groupIds = new HashSet<>();
+         for (PointGroupDefinition group : groups) {
++            if (group.id() == null || group.id().isBlank()) {
++                throw new IllegalArgumentException("点位组 ID 不能为空");
++            }
++            if (!groupIds.add(group.id())) {
++                throw new IllegalArgumentException("点位组 ID 不能重复：" + group.id());
++            }
++            if (group.groupName() == null || group.groupName().isBlank()) {
++                throw new IllegalArgumentException("组名称不能为空：" + group.id());
++            }
++            if (group.checkIntervalSeconds() < 60 || group.checkIntervalSeconds() > 86400) {
++                throw new IllegalArgumentException("检测周期必须在 1 到 1440 分钟之间：" + group.id());
++            }
++            if (group.rule().durationMinutes() < 1 || group.rule().durationMinutes() > 1440) {
++                throw new IllegalArgumentException("报警持续时间必须在 1 到 1440 分钟之间：" + group.id());
++            }
+             int backupCount = 0;
++            int useCount = 0;
++            Set<String> pointCodes = new HashSet<>();
+             for (GroupMonitorPoint point : group.points()) {
++                if (point.enabled() && point.role() == PointRole.USE) {
++                    useCount++;
++                }
+                 if (point.enabled() && point.role() == PointRole.BACKUP) {
+                     backupCount++;
+                 }
++                if (point.enabled()) {
++                    if (point.code() == null || point.code().isBlank()) {
++                        throw new IllegalArgumentException("启用点位编码不能为空：" + group.id());
++                    }
++                    if (!pointCodes.add(point.code())) {
++                        throw new IllegalArgumentException("同组点位编码不能重复：" + group.id() + " / " + point.code());
++                    }
++                }
++            }
++            if (group.enabled() && useCount == 0) {
++                throw new IllegalArgumentException("启用组至少需要一个启用的使用位：" + group.id());
+             }
+             if (group.rule().minBackupAvailable() > backupCount) {
+                 throw new IllegalArgumentException("minBackupAvailable cannot exceed backup point count for "
+diff --git a/src/com/local/monitor/GroupMonitorLogic.java b/src/com/local/monitor/GroupMonitorLogic.java
+index 018f811..ca5cdfa 100644
+--- a/src/com/local/monitor/GroupMonitorLogic.java
++++ b/src/com/local/monitor/GroupMonitorLogic.java
+@@ -107,6 +107,48 @@ public final class GroupMonitorLogic {
+                         pointStatuses));
+     }
+
++    public static GroupEvaluation queryFailed(
++            PointGroupDefinition group,
++            GroupRuntimeState state,
++            LocalDateTime now,
++            String errorSummary) {
++        if (group == null) {
++            throw new IllegalArgumentException("group is required");
++        }
++        if (state == null) {
++            throw new IllegalArgumentException("runtime state is required");
++        }
++        if (now == null) {
++            throw new IllegalArgumentException("now is required");
++        }
++        state.markQueryFailed(now);
++        int backupTotal = 0;
++        for (GroupMonitorPoint point : group.points()) {
++            if (point.enabled() && point.role() == PointRole.BACKUP) {
++                backupTotal++;
++            }
++        }
++        String message = errorSummary == null || errorSummary.isBlank()
++                ? "查询失败：本次未能从数据库获得点位状态。"
++                : errorSummary;
++        return new GroupEvaluation(
++                group.id(),
++                group.areaName(),
++                group.groupName(),
++                group.materialName(),
++                GroupAlertStatus.QUERY_FAILED,
++                false,
++                backupTotal,
++                0,
++                0,
++                false,
++                0,
++                group.rule().durationSeconds(),
++                List.of(),
++                false,
++                message);
++    }
++
+     static boolean isAvailable(PointRecord record) {
+         return record != null
+                 && !MonitorLogic.isBlank(record.podCode())
+diff --git a/src/com/local/monitor/GroupRuntimeState.java b/src/com/local/monitor/GroupRuntimeState.java
+index d7bf8d0..d44d949 100644
+--- a/src/com/local/monitor/GroupRuntimeState.java
++++ b/src/com/local/monitor/GroupRuntimeState.java
+@@ -77,6 +77,11 @@ public final class GroupRuntimeState {
+         activeDialogShown = true;
+     }
+
++    void markQueryFailed(LocalDateTime checkedAt) {
++        reset();
++        lastCheckedAt = checkedAt;
++    }
++
+     void reset() {
+         conditionFirstMatchedAt = null;
+         conditionLastMatchedAt = null;
+diff --git a/src/com/local/monitor/GroupStatusText.java b/src/com/local/monitor/GroupStatusText.java
+index 335c312..78ed363 100644
+--- a/src/com/local/monitor/GroupStatusText.java
++++ b/src/com/local/monitor/GroupStatusText.java
+@@ -7,6 +7,9 @@ public final class GroupStatusText {
+     }
+
+     public static String statusText(GroupAlertStatus status) {
++        if (status == GroupAlertStatus.QUERY_FAILED) {
++            return "查询失败";
++        }
+         if (status == GroupAlertStatus.NORMAL) {
+             return "正常";
+         }
+@@ -62,6 +65,10 @@ public final class GroupStatusText {
+             int continuousMatchedSeconds,
+             int alertDurationSeconds,
+             List<PointStatusView> pointStatuses) {
++        if (status == GroupAlertStatus.QUERY_FAILED) {
++            return areaName + " / " + groupName + " / " + materialName
++                    + "：查询失败，本次未获得点位状态。";
++        }
+         StringBuilder builder = new StringBuilder();
+         builder.append(areaName)
+                 .append(" / ")
+diff --git a/src/com/local/monitor/PointDataQuery.java b/src/com/local/monitor/PointDataQuery.java
+new file mode 100644
+index 0000000..274c9c4
+--- /dev/null
++++ b/src/com/local/monitor/PointDataQuery.java
+@@ -0,0 +1,129 @@
++package com.local.monitor;
++
++import java.sql.Timestamp;
++import java.time.LocalDateTime;
++import java.time.format.DateTimeFormatter;
++
++public final class PointDataQuery {
++    private static final int DEFAULT_LIMIT = 100;
++    private static final int MAX_LIMIT = 500;
++    private static final DateTimeFormatter INPUT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
++
++    private final String pointKeyword;
++    private final String shelfKeyword;
++    private final String areaCode;
++    private final String relateAreaCode;
++    private final String updatedFrom;
++    private final String updatedTo;
++    private final int limit;
++    private final int offset;
++
++    public PointDataQuery(
++            String pointKeyword,
++            String shelfKeyword,
++            String areaCode,
++            String relateAreaCode,
++            String updatedFrom,
++            String updatedTo,
++            int limit,
++            int offset) {
++        this.pointKeyword = normalize(pointKeyword);
++        this.shelfKeyword = normalize(shelfKeyword);
++        this.areaCode = normalize(areaCode);
++        this.relateAreaCode = normalize(relateAreaCode);
++        this.updatedFrom = normalize(updatedFrom);
++        this.updatedTo = normalize(updatedTo);
++        this.limit = Math.max(1, Math.min(MAX_LIMIT, limit <= 0 ? DEFAULT_LIMIT : limit));
++        this.offset = Math.max(0, offset);
++    }
++
++    public static String fixedSelectSql(String schema) {
++        String safeSchema = PointQuery.validateIdentifier(schema, "schema");
++        return "select map_data_code as point_code, pod_code as shelf_code, pod_status as shelf_status, "
++                + "status, ind_lock as lock_state, area_code, relate_area_code as next_area_code, "
++                + "date_chg as updated_at, date_chg as marked_at "
++                + "from " + safeSchema + ".tcs_map_data "
++                + "where (? = '' or lower(map_data_code) like lower(?)) "
++                + "and (? = '' or lower(coalesce(pod_code, '')) like lower(?)) "
++                + "and (? = '' or area_code = ?) "
++                + "and (? = '' or relate_area_code = ?) "
++                + "and (? = '' or date_chg >= ?) "
++                + "and (? = '' or date_chg <= ?) "
++                + "order by date_chg desc, map_data_code "
++                + "limit ? offset ?";
++    }
++
++    public String pointKeyword() {
++        return pointKeyword;
++    }
++
++    public String shelfKeyword() {
++        return shelfKeyword;
++    }
++
++    public String areaCode() {
++        return areaCode;
++    }
++
++    public String relateAreaCode() {
++        return relateAreaCode;
++    }
++
++    public String updatedFrom() {
++        return updatedFrom;
++    }
++
++    public String updatedTo() {
++        return updatedTo;
++    }
++
++    public int limit() {
++        return limit;
++    }
++
++    public int offset() {
++        return offset;
++    }
++
++    Timestamp fromTimestampOrEpoch() {
++        if (updatedFrom.isBlank()) {
++            return Timestamp.valueOf(LocalDateTime.of(1970, 1, 1, 0, 0));
++        }
++        return Timestamp.valueOf(parseDateTime(updatedFrom, "更新时间起始"));
++    }
++
++    Timestamp toTimestampOrFuture() {
++        if (updatedTo.isBlank()) {
++            return Timestamp.valueOf(LocalDateTime.of(2999, 12, 31, 23, 59, 59));
++        }
++        return Timestamp.valueOf(parseDateTime(updatedTo, "更新时间结束"));
++    }
++
++    String pointLike() {
++        return like(pointKeyword);
++    }
++
++    String shelfLike() {
++        return like(shelfKeyword);
++    }
++
++    private static String normalize(String value) {
++        return value == null ? "" : value.trim();
++    }
++
++    private static String like(String value) {
++        return "%" + value + "%";
++    }
++
++    private static LocalDateTime parseDateTime(String value, String label) {
++        try {
++            String normalized = value.trim();
++            if (normalized.length() == 10) {
++                normalized = normalized + " 00:00:00";
++            }
++            return LocalDateTime.parse(normalized, INPUT_FORMAT);
++        } catch (Exception ex) {
++            throw new IllegalArgumentException(label + "必须使用 yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss");
++        }
++    }
++}
+diff --git a/src/com/local/monitor/PointDataQueryRepository.java b/src/com/local/monitor/PointDataQueryRepository.java
+new file mode 100644
+index 0000000..ea2fad0
+--- /dev/null
++++ b/src/com/local/monitor/PointDataQueryRepository.java
+@@ -0,0 +1,56 @@
++package com.local.monitor;
++
++import java.sql.Connection;
++import java.sql.PreparedStatement;
++import java.sql.ResultSet;
++import java.sql.Timestamp;
++import java.time.LocalDateTime;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class PointDataQueryRepository {
++    public PointDataQueryResult query(DbConfig config, char[] password, PointDataQuery query) throws Exception {
++        String sql = PointDataQuery.fixedSelectSql(config.schema());
++        try (Connection conn = ReadOnlyConnectionFactory.open(config, password);
++             PreparedStatement ps = conn.prepareStatement(sql)) {
++            ps.setQueryTimeout(8);
++            int index = 1;
++            ps.setString(index++, query.pointKeyword());
++            ps.setString(index++, query.pointLike());
++            ps.setString(index++, query.shelfKeyword());
++            ps.setString(index++, query.shelfLike());
++            ps.setString(index++, query.areaCode());
++            ps.setString(index++, query.areaCode());
++            ps.setString(index++, query.relateAreaCode());
++            ps.setString(index++, query.relateAreaCode());
++            ps.setString(index++, query.updatedFrom());
++            ps.setTimestamp(index++, query.fromTimestampOrEpoch());
++            ps.setString(index++, query.updatedTo());
++            ps.setTimestamp(index++, query.toTimestampOrFuture());
++            ps.setInt(index++, query.limit());
++            ps.setInt(index, query.offset());
++
++            List<PointRecord> records = new ArrayList<>();
++            try (ResultSet rs = ps.executeQuery()) {
++                while (rs.next()) {
++                    records.add(new PointRecord(
++                            rs.getString("point_code"),
++                            rs.getString("shelf_code"),
++                            rs.getString("shelf_status"),
++                            rs.getInt("status"),
++                            rs.getInt("lock_state"),
++                            rs.getString("area_code"),
++                            rs.getString("next_area_code"),
++                            toLocalDateTime(rs.getTimestamp("updated_at")),
++                            toLocalDateTime(rs.getTimestamp("marked_at"))));
++                }
++            }
++            conn.rollback();
++            return new PointDataQueryResult("select", sql, records);
++        }
++    }
++
++    private static LocalDateTime toLocalDateTime(Timestamp timestamp) {
++        return timestamp == null ? null : timestamp.toLocalDateTime();
++    }
++}
+diff --git a/src/com/local/monitor/PointDataQueryResult.java b/src/com/local/monitor/PointDataQueryResult.java
+new file mode 100644
+index 0000000..084f97b
+--- /dev/null
++++ b/src/com/local/monitor/PointDataQueryResult.java
+@@ -0,0 +1,29 @@
++package com.local.monitor;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
++
++public final class PointDataQueryResult {
++    private final String sqlKind;
++    private final String sqlTemplate;
++    private final List<PointRecord> records;
++
++    public PointDataQueryResult(String sqlKind, String sqlTemplate, List<PointRecord> records) {
++        this.sqlKind = sqlKind;
++        this.sqlTemplate = sqlTemplate;
++        this.records = Collections.unmodifiableList(new ArrayList<>(records));
++    }
++
++    public String sqlKind() {
++        return sqlKind;
++    }
++
++    public String sqlTemplate() {
++        return sqlTemplate;
++    }
++
++    public List<PointRecord> records() {
++        return records;
++    }
++}
+diff --git a/src/com/local/monitor/ShelfPointMonitorApp.java b/src/com/local/monitor/ShelfPointMonitorApp.java
+index 0695237..eacc38a 100644
+--- a/src/com/local/monitor/ShelfPointMonitorApp.java
++++ b/src/com/local/monitor/ShelfPointMonitorApp.java
+@@ -11,6 +11,7 @@ import java.awt.GridBagConstraints;
+ import java.awt.GridBagLayout;
+ import java.awt.GridLayout;
+ import java.awt.Insets;
++import java.awt.Toolkit;
+ import java.awt.event.WindowAdapter;
+ import java.awt.event.WindowEvent;
+ import java.io.InputStream;
+@@ -24,6 +25,7 @@ import java.time.LocalDateTime;
+ import java.time.format.DateTimeFormatter;
+ import java.util.ArrayList;
+ import java.util.Arrays;
++import java.util.Comparator;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
+@@ -55,6 +57,7 @@ import javax.swing.JTextField;
+ import javax.swing.ListSelectionModel;
+ import javax.swing.SpinnerNumberModel;
+ import javax.swing.SwingUtilities;
++import javax.swing.Timer;
+ import javax.swing.UIManager;
+ import javax.swing.WindowConstants;
+ import javax.swing.table.DefaultTableModel;
+@@ -64,27 +67,40 @@ public final class ShelfPointMonitorApp extends JFrame {
+     private static final String EXPECTED_SELF_TEST_VERSION = "0.4.0";
+     private static final Pattern PRIVATE_10_NET_PATTERN = Pattern.compile("\\b10(?:\\.\\d{1,3}){3}\\b");
+     private static final Pattern REAL_POINT_CODE_PATTERN = Pattern.compile("\\b\\d{6}BB\\d{6}\\b");
++    private static final String PAGE_OVERVIEW = "监控总览";
++    private static final String PAGE_GROUPS = "点位组管理";
++    private static final String PAGE_ALERT_CENTER = "报警中心";
+     private static final String PAGE_CONNECTIONS = "连接管理";
+-    private static final String PAGE_BROWSER = "数据库浏览器";
+-    private static final String PAGE_ALERTS = "点位缺料报警";
++    private static final String PAGE_DATA_QUERY = "数据查询";
++    private static final String PAGE_BROWSER = "数据源浏览器";
++    private static final String PAGE_LOGS = "日志与系统";
++    private static final String PAGE_SETTINGS = "系统设置";
+
+     private final ConfigStore configStore = new ConfigStore(Paths.get("data", "config.properties"));
+     private final GroupConfigStore groupConfigStore = new GroupConfigStore(Paths.get("data", "group-config.properties"));
+     private final ConnectionProfileStore profileStore = new ConnectionProfileStore(
+             Paths.get("data", "connections.properties"));
++    private final UiPreferencesStore uiPreferencesStore =
++            new UiPreferencesStore(Paths.get("data", "ui-settings.properties"));
+     private final PointRepository pointRepository = new PointRepository();
+     private final DbMetadataRepository metadataRepository = new DbMetadataRepository();
++    private final PointDataQueryRepository pointDataQueryRepository = new PointDataQueryRepository();
+     private final AlertState alertState = new AlertState();
+     private final PointSchedule pointSchedule = new PointSchedule();
+     private final GroupLogWriter groupLogWriter = new GroupLogWriter(Paths.get("logs"));
+     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+     private final Path logPath = Paths.get("logs", "monitor.log");
+
+-    private final JList<String> navigationList = new JList<>(new String[] {
+-            PAGE_CONNECTIONS, PAGE_BROWSER, PAGE_ALERTS});
++    private UiPreferences uiPreferences = uiPreferencesStore.load();
++
++    private final JList<String> navigationList = new JList<>(UiPreferences.pageNames().toArray(new String[0]));
+     private final CardLayout cardLayout = new CardLayout();
+     private final JPanel cardPanel = new JPanel(cardLayout);
+     private final JLabel currentConnectionLabel = new JLabel("当前连接：未连接");
++    private final JLabel monitorStatusLabel = new JLabel("监控状态：未运行");
++    private final JLabel lastCheckLabel = new JLabel("上次检测：--");
++    private final JLabel nextCheckLabel = new JLabel("下次检测：--");
++    private final JLabel bottomStatusLabel = new JLabel("就绪");
+
+     private final DefaultListModel<String> profileListModel = new DefaultListModel<>();
+     private final JList<String> profileList = new JList<>(profileListModel);
+@@ -106,10 +122,84 @@ public final class ShelfPointMonitorApp extends JFrame {
+             new Object[] {"Schema", "Name", "Type"}, 0);
+     private final JTable browserTable = new JTable(browserTableModel);
+     private final DefaultTableModel columnModel = new DefaultTableModel(
+-            new Object[] {"Column", "Type", "Size", "Nullable"}, 0);
++            new Object[] {"列名", "数据类型", "长度", "可空", "默认值", "备注"}, 0);
+     private final JTable columnTable = new JTable(columnModel);
+     private final DefaultTableModel previewModel = new DefaultTableModel();
+     private final JTable previewTable = new JTable(previewModel);
++    private final JLabel schemaCountLabel = new JLabel("Schema 数量：--");
++    private final JLabel objectCountLabel = new JLabel("表 / 视图数量：--");
++    private final JLabel objectTypeLabel = new JLabel("当前对象类型：--");
++    private final JLabel browserModeLabel = new JLabel("连接模式：只读");
++
++    private final DefaultTableModel overviewModel = new DefaultTableModel(
++            new Object[] {"状态", "区域", "物料组", "使用位状态", "备用位可用数", "持续时间", "上次检测"}, 0) {
++        @Override
++        public boolean isCellEditable(int row, int column) {
++            return false;
++        }
++    };
++    private final JTable overviewTable = new JTable(overviewModel);
++    private final JTextArea overviewDetailArea = new JTextArea();
++    private final JLabel overviewGroupCountLabel = new JLabel("0");
++    private final JLabel overviewAlertCountLabel = new JLabel("0");
++    private final JLabel overviewPendingCountLabel = new JLabel("0");
++    private final JLabel overviewDataErrorCountLabel = new JLabel("0");
++
++    private final DefaultTableModel alertCenterModel = new DefaultTableModel(
++            new Object[] {"时间", "区域", "物料组", "原因", "持续时间", "处理状态"}, 0) {
++        @Override
++        public boolean isCellEditable(int row, int column) {
++            return false;
++        }
++    };
++    private final JTable alertCenterTable = new JTable(alertCenterModel);
++    private final JComboBox<String> alertCenterFilterBox = new JComboBox<>(
++            new String[] {"活跃报警", "已关注", "观察中", "查询失败", "已恢复"});
++    private final JTextArea alertCenterDetailArea = new JTextArea();
++
++    private final JTextField queryPointKeywordField = new JTextField(12);
++    private final JTextField queryShelfKeywordField = new JTextField(12);
++    private final JTextField queryAreaCodeField = new JTextField(10);
++    private final JTextField queryRelateAreaCodeField = new JTextField(10);
++    private final JTextField queryUpdatedFromField = new JTextField(14);
++    private final JTextField queryUpdatedToField = new JTextField(14);
++    private final JSpinner queryLimitSpinner = new JSpinner(new SpinnerNumberModel(100, 1, 500, 10));
++    private final DefaultTableModel dataQueryModel = new DefaultTableModel(
++            new Object[] {"点位编码", "货架编号", "货架状态", "状态", "锁定状态", "区域编码", "关联区域", "更新时间", "查询状态"}, 0) {
++        @Override
++        public boolean isCellEditable(int row, int column) {
++            return false;
++        }
++    };
++    private final JTable dataQueryTable = new JTable(dataQueryModel);
++    private final JTextArea dataQueryDetailArea = new JTextArea();
++
++    private final DefaultTableModel systemLogModel = new DefaultTableModel(
++            new Object[] {"时间", "事件类型", "级别", "点位组", "描述", "来源"}, 0) {
++        @Override
++        public boolean isCellEditable(int row, int column) {
++            return false;
++        }
++    };
++    private final JTable systemLogTable = new JTable(systemLogModel);
++    private final JComboBox<String> systemLogTypeFilterBox = new JComboBox<>(
++            new String[] {"全部", "报警触发", "已关注", "恢复", "查询失败", "查询恢复", "检测完成", "连接成功"});
++    private final JTextField systemLogFromField = new JTextField(12);
++    private final JTextField systemLogToField = new JTextField(12);
++    private final JTextField systemLogGroupField = new JTextField(10);
++    private final JTextField systemLogKeywordField = new JTextField(12);
++    private final JTextArea systemLogDetailArea = new JTextArea();
++
++    private final JComboBox<String> settingsDefaultPageBox =
++            new JComboBox<>(UiPreferences.pageNames().toArray(new String[0]));
++    private final JSpinner settingsOverviewRefreshSpinner = new JSpinner(new SpinnerNumberModel(10, 5, 3600, 5));
++    private final JCheckBox settingsAlertPopupBox = new JCheckBox("报警弹窗启用");
++    private final JCheckBox settingsAlertSoundBox = new JCheckBox("报警声音提示");
++    private final JSpinner settingsLogRetentionSpinner = new JSpinner(new SpinnerNumberModel(30, 1, 3650, 1));
++    private final JComboBox<String> settingsDensityBox =
++            new JComboBox<>(UiPreferences.densities().toArray(new String[0]));
++    private final JCheckBox settingsStartupSelfTestBox = new JCheckBox("启动时执行自检");
++    private final JCheckBox settingsAutoCleanupLogsBox = new JCheckBox("日志自动清理");
+
+     private final JSpinner intervalSpinner = new JSpinner(new SpinnerNumberModel(10, 10, 86400, 10));
+     private final DefaultTableModel pointModel = new DefaultTableModel(
+@@ -156,10 +246,13 @@ public final class ShelfPointMonitorApp extends JFrame {
+     private final Object groupMonitorLock = new Object();
+     private final Map<String, GroupRuntimeState> groupStates = new LinkedHashMap<>();
+     private final Map<String, GroupAlertStatus> lastGroupStatuses = new LinkedHashMap<>();
++    private final Map<String, GroupEvaluation> lastGroupEvaluations = new LinkedHashMap<>();
+     private ConnectionProfile currentProfile;
+     private char[] currentPassword = new char[0];
+     private ScheduledFuture<?> scheduledTask;
++    private Timer overviewRefreshTimer;
+     private JDialog activeDialog;
++    private String activeDialogGroupId = "";
+
+     public static void main(String[] args) {
+         if (args.length > 0 && "--self-test".equals(args[0])) {
+@@ -181,19 +274,31 @@ public final class ShelfPointMonitorApp extends JFrame {
+     }
+
+     public ShelfPointMonitorApp() {
+-        super("只读业务数据库工具 - 第一阶段");
++        super("只读业务数据库工具");
+         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+-        setMinimumSize(new Dimension(1120, 720));
++        setMinimumSize(new Dimension(1180, 760));
+         addWindowListener(new WindowAdapter() {
+             @Override
+             public void windowClosing(WindowEvent e) {
+                 executor.shutdownNow();
++                if (overviewRefreshTimer != null) {
++                    overviewRefreshTimer.stop();
++                }
+             }
+         });
+         buildUi();
+         loadProfiles();
+         loadGroupConfig();
++        loadSettingsForm();
++        applyUiPreferences();
++        selectDefaultPage();
+         appendStatus("程序已启动。密码只保存在本次运行内，不写入配置文件。");
++        if (uiPreferences.startupSelfTestEnabled()) {
++            runOnceInBackground(() -> {
++                runSelfTest(resolveSelfTestAppRoot());
++                SwingUtilities.invokeLater(() -> appendStatus("启动自检通过。"));
++            });
++        }
+     }
+
+     static void runSelfTestForTest(Path appRoot) throws Exception {
+@@ -356,12 +461,11 @@ public final class ShelfPointMonitorApp extends JFrame {
+     }
+
+     private void buildUi() {
+-        JPanel root = new JPanel(new BorderLayout(10, 10));
+-        root.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
++        JPanel root = new JPanel(new BorderLayout(0, 0));
++        root.setBackground(new Color(245, 247, 250));
+         setContentPane(root);
+
+-        currentConnectionLabel.setFont(currentConnectionLabel.getFont().deriveFont(Font.BOLD));
+-        root.add(currentConnectionLabel, BorderLayout.NORTH);
++        root.add(buildTopStatusBar(), BorderLayout.NORTH);
+
+         navigationList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+         navigationList.setSelectedIndex(0);
+@@ -371,15 +475,115 @@ public final class ShelfPointMonitorApp extends JFrame {
+             }
+         });
+
++        cardPanel.add(buildOverviewPage(), PAGE_OVERVIEW);
++        cardPanel.add(buildGroupManagementPage(), PAGE_GROUPS);
++        cardPanel.add(buildAlertCenterPage(), PAGE_ALERT_CENTER);
+         cardPanel.add(buildConnectionPage(), PAGE_CONNECTIONS);
++        cardPanel.add(buildDataQueryPage(), PAGE_DATA_QUERY);
+         cardPanel.add(buildBrowserPage(), PAGE_BROWSER);
+-        cardPanel.add(buildAlertPage(), PAGE_ALERTS);
++        cardPanel.add(buildLogsSystemPage(), PAGE_LOGS);
++        cardPanel.add(buildSystemSettingsPage(), PAGE_SETTINGS);
+
+         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(navigationList), cardPanel);
+-        split.setDividerLocation(160);
++        split.setDividerLocation(210);
+         split.setResizeWeight(0);
+         root.add(split, BorderLayout.CENTER);
+-        root.add(buildStatusPanel(), BorderLayout.SOUTH);
++        root.add(buildBottomStatusBar(), BorderLayout.SOUTH);
++    }
++
++    private JPanel buildTopStatusBar() {
++        JPanel panel = new JPanel(new GridLayout(1, 4, 12, 0));
++        panel.setBorder(javax.swing.BorderFactory.createCompoundBorder(
++                javax.swing.BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 225, 232)),
++                javax.swing.BorderFactory.createEmptyBorder(12, 16, 12, 16)));
++        panel.setBackground(Color.WHITE);
++        currentConnectionLabel.setFont(currentConnectionLabel.getFont().deriveFont(Font.BOLD));
++        panel.add(currentConnectionLabel);
++        panel.add(monitorStatusLabel);
++        panel.add(lastCheckLabel);
++        panel.add(nextCheckLabel);
++        return panel;
++    }
++
++    private JPanel buildBottomStatusBar() {
++        JPanel panel = new JPanel(new BorderLayout());
++        panel.setPreferredSize(new Dimension(100, 28));
++        panel.setBorder(javax.swing.BorderFactory.createCompoundBorder(
++                javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(220, 225, 232)),
++                javax.swing.BorderFactory.createEmptyBorder(4, 12, 4, 12)));
++        panel.setBackground(Color.WHITE);
++        panel.add(bottomStatusLabel, BorderLayout.WEST);
++        panel.add(new JLabel("版本：" + EXPECTED_SELF_TEST_VERSION), BorderLayout.EAST);
++        return panel;
++    }
++
++    private JPanel buildOverviewPage() {
++        JPanel page = new JPanel(new BorderLayout(12, 12));
++        page.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12));
++        page.setBackground(new Color(245, 247, 250));
++
++        JPanel stats = new JPanel(new GridLayout(1, 4, 12, 0));
++        stats.setOpaque(false);
++        stats.add(statCard("监控点位组", overviewGroupCountLabel, new Color(38, 105, 210)));
++        stats.add(statCard("缺料报警", overviewAlertCountLabel, new Color(190, 48, 48)));
++        stats.add(statCard("观察中", overviewPendingCountLabel, new Color(190, 120, 30)));
++        stats.add(statCard("数据异常", overviewDataErrorCountLabel, new Color(160, 70, 120)));
++        page.add(stats, BorderLayout.NORTH);
++
++        overviewTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
++        overviewTable.setRowHeight(28);
++        overviewTable.getSelectionModel().addListSelectionListener(e -> {
++            if (!e.getValueIsAdjusting()) {
++                updateOverviewDetail();
++            }
++        });
++        overviewDetailArea.setEditable(false);
++        overviewDetailArea.setLineWrap(true);
++        overviewDetailArea.setWrapStyleWord(true);
++        overviewDetailArea.setText("请选择左侧点位组查看详情。");
++
++        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
++        JButton start = new JButton("开始监控");
++        JButton stop = new JButton("停止监控");
++        JButton check = new JButton("立即检测");
++        JButton details = new JButton("查看报警详情");
++        JButton ack = new JButton("已关注");
++        start.addActionListener(e -> startMonitoring());
++        stop.addActionListener(e -> stopMonitoring());
++        check.addActionListener(e -> checkNow());
++        details.addActionListener(e -> navigationList.setSelectedValue(PAGE_ALERT_CENTER, true));
++        ack.addActionListener(e -> acknowledgeSelectedOverviewAlert());
++        buttons.add(start);
++        buttons.add(stop);
++        buttons.add(check);
++        buttons.add(details);
++        buttons.add(ack);
++
++        JPanel right = new JPanel(new BorderLayout(8, 8));
++        right.setBorder(javax.swing.BorderFactory.createTitledBorder("点位组详情"));
++        right.add(new JScrollPane(overviewDetailArea), BorderLayout.CENTER);
++        right.add(buttons, BorderLayout.SOUTH);
++
++        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(overviewTable), right);
++        split.setDividerLocation(690);
++        split.setResizeWeight(0.68);
++        page.add(split, BorderLayout.CENTER);
++        return page;
++    }
++
++    private JPanel statCard(String title, JLabel value, Color color) {
++        JPanel card = new JPanel(new BorderLayout(6, 6));
++        card.setBackground(Color.WHITE);
++        card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
++                javax.swing.BorderFactory.createLineBorder(new Color(220, 225, 232)),
++                javax.swing.BorderFactory.createEmptyBorder(12, 14, 12, 14)));
++        JLabel titleLabel = new JLabel(title);
++        titleLabel.setForeground(new Color(80, 88, 100));
++        value.setFont(value.getFont().deriveFont(Font.BOLD, 28f));
++        value.setForeground(color);
++        card.add(titleLabel, BorderLayout.NORTH);
++        card.add(value, BorderLayout.CENTER);
++        return card;
+     }
+
+     private JPanel buildConnectionPage() {
+@@ -420,11 +624,13 @@ public final class ShelfPointMonitorApp extends JFrame {
+         JButton newButton = new JButton("新建连接");
+         JButton saveButton = new JButton("保存连接");
+         JButton deleteButton = new JButton("删除连接");
+-        JButton testButton = new JButton("测试连接并使用");
++        JButton testButton = new JButton("测试连接");
++        JButton useButton = new JButton("设为当前连接");
+         buttons.add(newButton);
+         buttons.add(saveButton);
+         buttons.add(deleteButton);
+         buttons.add(testButton);
++        buttons.add(useButton);
+         row++;
+         GridBagConstraints buttonsConstraints = gbc(0, row);
+         buttonsConstraints.gridwidth = 6;
+@@ -436,15 +642,29 @@ public final class ShelfPointMonitorApp extends JFrame {
+         saveButton.addActionListener(e -> saveProfile());
+         deleteButton.addActionListener(e -> deleteProfile());
+         testButton.addActionListener(e -> testSelectedProfile());
++        useButton.addActionListener(e -> useProfileWithoutTest());
+         profileDbTypeBox.addActionListener(e -> updateProfileTypeEnabled());
+
++        JPanel safety = new JPanel(new GridLayout(0, 1, 4, 4));
++        safety.setBorder(javax.swing.BorderFactory.createTitledBorder("安全说明"));
++        safety.add(new JLabel("数据库访问模式：只读"));
++        safety.add(new JLabel("密码仅保存在当前运行内存，不写入配置文件"));
++        safety.add(new JLabel("现场必须使用数据库只读账号"));
++        safety.add(new JLabel("不展示完整 JDBC URL、密码或历史密码"));
+         page.add(form, BorderLayout.CENTER);
++        page.add(safety, BorderLayout.EAST);
+         return page;
+     }
+
+     private JPanel buildBrowserPage() {
+         JPanel page = new JPanel(new BorderLayout(8, 8));
+-        page.setBorder(javax.swing.BorderFactory.createTitledBorder("数据库浏览器（只读）"));
++        page.setBorder(javax.swing.BorderFactory.createTitledBorder("数据源浏览器（只读）"));
++
++        JPanel stats = new JPanel(new GridLayout(1, 4, 8, 0));
++        stats.add(browserStatCard(schemaCountLabel));
++        stats.add(browserStatCard(objectCountLabel));
++        stats.add(browserStatCard(objectTypeLabel));
++        stats.add(browserStatCard(browserModeLabel));
+
+         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+         JButton refreshSchemasButton = new JButton("刷新 Schema");
+@@ -455,7 +675,10 @@ public final class ShelfPointMonitorApp extends JFrame {
+         top.add(refreshSchemasButton);
+         top.add(loadTablesButton);
+         top.add(previewButton);
+-        page.add(top, BorderLayout.NORTH);
++        JPanel north = new JPanel(new BorderLayout());
++        north.add(stats, BorderLayout.NORTH);
++        north.add(top, BorderLayout.SOUTH);
++        page.add(north, BorderLayout.NORTH);
+
+         browserTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+         browserTable.getSelectionModel().addListSelectionListener(e -> {
+@@ -478,9 +701,71 @@ public final class ShelfPointMonitorApp extends JFrame {
+         return page;
+     }
+
+-    private JPanel buildAlertPage() {
++    private JPanel browserStatCard(JLabel label) {
++        JPanel card = new JPanel(new BorderLayout());
++        card.setBackground(Color.WHITE);
++        card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
++                javax.swing.BorderFactory.createLineBorder(new Color(220, 225, 232)),
++                javax.swing.BorderFactory.createEmptyBorder(8, 10, 8, 10)));
++        card.add(label, BorderLayout.CENTER);
++        return card;
++    }
++
++    private JPanel buildDataQueryPage() {
++        JPanel page = new JPanel(new BorderLayout(8, 8));
++        page.setBorder(javax.swing.BorderFactory.createTitledBorder("数据查询（结构化只读）"));
++
++        JPanel filters = new JPanel(new GridBagLayout());
++        int row = 0;
++        addField(filters, row, 0, "点位编码关键字", queryPointKeywordField);
++        addField(filters, row, 2, "货架编号关键字", queryShelfKeywordField);
++        addField(filters, row, 4, "区域编码", queryAreaCodeField);
++        row++;
++        addField(filters, row, 0, "关联区域编码", queryRelateAreaCodeField);
++        addField(filters, row, 2, "更新时间起", queryUpdatedFromField);
++        addField(filters, row, 4, "更新时间止", queryUpdatedToField);
++        row++;
++        addField(filters, row, 0, "行数上限", queryLimitSpinner);
++        JButton queryButton = new JButton("执行只读查询");
++        queryButton.addActionListener(e -> runOnceInBackground(this::executePointDataQuery));
++        GridBagConstraints buttonConstraints = gbc(2, row);
++        buttonConstraints.gridwidth = 2;
++        buttonConstraints.fill = GridBagConstraints.HORIZONTAL;
++        filters.add(queryButton, buttonConstraints);
++
++        dataQueryTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
++        dataQueryTable.setRowHeight(26);
++        dataQueryTable.getSelectionModel().addListSelectionListener(e -> {
++            if (!e.getValueIsAdjusting()) {
++                updateDataQueryDetail();
++            }
++        });
++        dataQueryDetailArea.setEditable(false);
++        dataQueryDetailArea.setLineWrap(true);
++        dataQueryDetailArea.setWrapStyleWord(true);
++        dataQueryDetailArea.setText("只读查询\n不支持 SQL 编辑\n不支持数据修改");
++
++        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
++                new JScrollPane(dataQueryTable), new JScrollPane(dataQueryDetailArea));
++        split.setDividerLocation(760);
++        split.setResizeWeight(0.75);
++
++        JPanel safety = new JPanel(new GridLayout(0, 1, 4, 4));
++        safety.setBorder(javax.swing.BorderFactory.createTitledBorder("安全边界"));
++        safety.add(new JLabel("只读查询"));
++        safety.add(new JLabel("不支持 SQL 编辑"));
++        safety.add(new JLabel("不支持数据修改"));
++        safety.add(new JLabel("固定来源表：tcs_map_data"));
++
++        page.add(filters, BorderLayout.NORTH);
++        page.add(split, BorderLayout.CENTER);
++        page.add(safety, BorderLayout.SOUTH);
++        return page;
++    }
++
++    private JPanel buildGroupManagementPage() {
+         JPanel page = new JPanel(new BorderLayout(8, 8));
+-        page.setBorder(javax.swing.BorderFactory.createTitledBorder("点位组缺料报警"));
++        page.setBorder(javax.swing.BorderFactory.createTitledBorder("点位组管理"));
+
+         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+         JButton addGroupButton = new JButton("新增组");
+@@ -488,11 +773,15 @@ public final class ShelfPointMonitorApp extends JFrame {
+         JButton addPointButton = new JButton("新增点位");
+         JButton removePointButton = new JButton("删除点位");
+         JButton saveButton = new JButton("保存配置");
++        JButton discardButton = new JButton("放弃修改");
++        JButton validateButton = new JButton("验证配置");
+         top.add(addGroupButton);
+         top.add(removeGroupButton);
+         top.add(addPointButton);
+         top.add(removePointButton);
+         top.add(saveButton);
++        top.add(discardButton);
++        top.add(validateButton);
+         top.add(startButton);
+         top.add(stopButton);
+         top.add(checkButton);
+@@ -549,6 +838,8 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 PointRole.BACKUP.name(), "备用位", "", Boolean.TRUE}));
+         removePointButton.addActionListener(e -> removeSelectedGroupPointRows());
+         saveButton.addActionListener(e -> saveGroupConfig());
++        discardButton.addActionListener(e -> loadGroupConfig());
++        validateButton.addActionListener(e -> validateGroupConfigFromUi());
+         startButton.addActionListener(e -> startMonitoring());
+         stopButton.addActionListener(e -> stopMonitoring());
+         checkButton.addActionListener(e -> checkNow());
+@@ -576,6 +867,170 @@ public final class ShelfPointMonitorApp extends JFrame {
+         return form;
+     }
+
++    private JPanel buildAlertCenterPage() {
++        JPanel page = new JPanel(new BorderLayout(8, 8));
++        page.setBorder(javax.swing.BorderFactory.createTitledBorder("报警中心"));
++
++        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
++        top.add(new JLabel("活跃报警"));
++        top.add(new JLabel("已关注"));
++        top.add(new JLabel("观察中"));
++        top.add(new JLabel("查询失败"));
++        top.add(new JLabel("已恢复"));
++        top.add(new JLabel("筛选："));
++        top.add(alertCenterFilterBox);
++        JButton refresh = new JButton("刷新报警");
++        JButton ack = new JButton("标记已关注");
++        JButton details = new JButton("查看点位详情");
++        JButton check = new JButton("立即检测该组");
++        JButton connection = new JButton("查看连接状态");
++        top.add(refresh);
++        top.add(ack);
++        top.add(details);
++        top.add(check);
++        top.add(connection);
++        page.add(top, BorderLayout.NORTH);
++
++        alertCenterTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
++        alertCenterTable.setRowHeight(26);
++        alertCenterTable.getSelectionModel().addListSelectionListener(e -> {
++            if (!e.getValueIsAdjusting()) {
++                updateAlertCenterDetail();
++            }
++        });
++        alertCenterDetailArea.setEditable(false);
++        alertCenterDetailArea.setLineWrap(true);
++        alertCenterDetailArea.setWrapStyleWord(true);
++        alertCenterDetailArea.setText("当前无报警事件。查询失败属于系统数据异常，不属于缺料报警。");
++
++        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
++                new JScrollPane(alertCenterTable), new JScrollPane(alertCenterDetailArea));
++        split.setDividerLocation(720);
++        split.setResizeWeight(0.7);
++        page.add(split, BorderLayout.CENTER);
++
++        alertCenterFilterBox.addActionListener(e -> refreshAlertCenterPage());
++        refresh.addActionListener(e -> refreshAlertCenterPage());
++        ack.addActionListener(e -> acknowledgeSelectedAlertCenterGroup());
++        details.addActionListener(e -> navigationList.setSelectedValue(PAGE_OVERVIEW, true));
++        check.addActionListener(e -> checkSelectedAlertCenterGroup());
++        connection.addActionListener(e -> navigationList.setSelectedValue(PAGE_CONNECTIONS, true));
++        return page;
++    }
++
++    private JPanel buildLogsSystemPage() {
++        JPanel page = new JPanel(new BorderLayout(8, 8));
++        page.setBorder(javax.swing.BorderFactory.createTitledBorder("日志与系统"));
++
++        JPanel health = new JPanel(new GridLayout(1, 6, 8, 0));
++        health.add(browserStatCard(new JLabel("监控调度器：" + (scheduledTask == null ? "未运行" : "运行中"))));
++        health.add(browserStatCard(new JLabel("当前连接：" + (currentProfile == null ? "未连接" : currentProfile.name()))));
++        health.add(browserStatCard(new JLabel(lastCheckLabel.getText())));
++        health.add(browserStatCard(new JLabel("配置文件：data")));
++        health.add(browserStatCard(new JLabel("日志目录：logs")));
++        health.add(browserStatCard(new JLabel("自检状态：可执行")));
++
++        JPanel filters = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
++        filters.add(new JLabel("事件类型："));
++        filters.add(systemLogTypeFilterBox);
++        filters.add(new JLabel("时间起："));
++        filters.add(systemLogFromField);
++        filters.add(new JLabel("时间止："));
++        filters.add(systemLogToField);
++        filters.add(new JLabel("点位组："));
++        filters.add(systemLogGroupField);
++        filters.add(new JLabel("关键字："));
++        filters.add(systemLogKeywordField);
++        JButton refresh = new JButton("刷新日志");
++        JButton open = new JButton("打开日志目录");
++        JButton selfTest = new JButton("执行自检");
++        JButton export = new JButton("导出诊断信息");
++        filters.add(refresh);
++        filters.add(open);
++        filters.add(selfTest);
++        filters.add(export);
++
++        JPanel north = new JPanel(new BorderLayout(8, 8));
++        north.add(health, BorderLayout.NORTH);
++        north.add(filters, BorderLayout.SOUTH);
++        page.add(north, BorderLayout.NORTH);
++
++        systemLogTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
++        systemLogTable.setRowHeight(26);
++        systemLogTable.getSelectionModel().addListSelectionListener(e -> {
++            if (!e.getValueIsAdjusting()) {
++                updateSystemLogDetail();
++            }
++        });
++        systemLogDetailArea.setEditable(false);
++        systemLogDetailArea.setLineWrap(true);
++        systemLogDetailArea.setWrapStyleWord(true);
++
++        JSplitPane logsSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
++                new JScrollPane(systemLogTable), new JScrollPane(systemLogDetailArea));
++        logsSplit.setDividerLocation(720);
++        logsSplit.setResizeWeight(0.7);
++
++        JSplitPane main = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logsSplit, new JScrollPane(statusArea));
++        main.setDividerLocation(430);
++        main.setResizeWeight(0.75);
++        page.add(main, BorderLayout.CENTER);
++
++        refresh.addActionListener(e -> loadSystemLogs());
++        systemLogTypeFilterBox.addActionListener(e -> loadSystemLogs());
++        systemLogFromField.addActionListener(e -> loadSystemLogs());
++        systemLogToField.addActionListener(e -> loadSystemLogs());
++        systemLogGroupField.addActionListener(e -> loadSystemLogs());
++        systemLogKeywordField.addActionListener(e -> loadSystemLogs());
++        open.addActionListener(e -> openLogs());
++        selfTest.addActionListener(e -> runOnceInBackground(this::executeSelfTestFromUi));
++        export.addActionListener(e -> exportDiagnostics());
++        return page;
++    }
++
++    private JPanel buildSystemSettingsPage() {
++        JPanel page = new JPanel(new BorderLayout(8, 8));
++        page.setBorder(javax.swing.BorderFactory.createTitledBorder("系统设置"));
++
++        JPanel form = new JPanel(new GridBagLayout());
++        int row = 0;
++        addField(form, row, 0, "默认首页", settingsDefaultPageBox);
++        addField(form, row, 2, "监控总览自动刷新间隔(秒)", settingsOverviewRefreshSpinner);
++        row++;
++        addCheckBox(form, row, 0, settingsAlertPopupBox);
++        addCheckBox(form, row, 2, settingsAlertSoundBox);
++        row++;
++        addField(form, row, 0, "日志保留天数", settingsLogRetentionSpinner);
++        addField(form, row, 2, "界面显示密度", settingsDensityBox);
++        row++;
++        addCheckBox(form, row, 0, settingsStartupSelfTestBox);
++        addCheckBox(form, row, 2, settingsAutoCleanupLogsBox);
++
++        JPanel security = new JPanel(new GridLayout(0, 1, 6, 6));
++        security.setBorder(javax.swing.BorderFactory.createTitledBorder("固定安全项"));
++        security.add(new JLabel("敏感信息脱敏：强制启用"));
++        security.add(new JLabel("数据库访问模式：只读"));
++        security.add(new JLabel("SQL 编辑能力：未提供"));
++        security.add(new JLabel("密码持久化：禁止"));
++
++        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
++        JButton save = new JButton("保存设置");
++        JButton defaults = new JButton("恢复默认");
++        JButton reload = new JButton("重新加载配置");
++        buttons.add(save);
++        buttons.add(defaults);
++        buttons.add(reload);
++
++        save.addActionListener(e -> saveUiPreferences());
++        defaults.addActionListener(e -> restoreUiPreferences());
++        reload.addActionListener(e -> reloadUiPreferences());
++
++        page.add(form, BorderLayout.NORTH);
++        page.add(security, BorderLayout.CENTER);
++        page.add(buttons, BorderLayout.SOUTH);
++        return page;
++    }
++
+     private void addCheckBox(JPanel panel, int row, int col, JCheckBox box) {
+         GridBagConstraints constraints = gbc(col, row);
+         constraints.gridwidth = 2;
+@@ -731,6 +1186,19 @@ public final class ShelfPointMonitorApp extends JFrame {
+         }
+     }
+
++    private void useProfileWithoutTest() {
++        try {
++            ConnectionProfile profile = readProfileForm();
++            currentProfile = profile;
++            Arrays.fill(currentPassword, '\0');
++            currentPassword = profilePasswordField.getPassword().clone();
++            updateCurrentConnectionLabel();
++            appendStatus("已设为当前连接：" + profile.name() + "。建议执行测试连接确认账号可用。");
++        } catch (Exception ex) {
++            showError(ex);
++        }
++    }
++
+     private ConnectionProfile readProfileForm() {
+         String id = profileIdField.getText().trim();
+         if (id.isEmpty()) {
+@@ -829,6 +1297,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+         }
+         currentConnectionLabel.setText("当前连接：" + currentProfile.name() + " / "
+                 + currentProfile.dbType() + " / " + currentProfile.schema());
++        loadSystemLogs();
+     }
+
+     private void refreshSchemas() throws Exception {
+@@ -839,6 +1308,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+             for (SchemaInfo schema : schemas) {
+                 schemaModel.addElement(schema.name());
+             }
++            schemaCountLabel.setText("Schema 数量：" + schemas.size());
+             selectSchema(currentProfile.schema());
+             appendStatus("已刷新 Schema：" + schemas.size() + " 个");
+         });
+@@ -868,6 +1338,8 @@ public final class ShelfPointMonitorApp extends JFrame {
+             for (TableInfo table : tables) {
+                 browserTableModel.addRow(new Object[] {table.schema(), table.name(), table.type()});
+             }
++            objectCountLabel.setText("表 / 视图数量：" + tables.size());
++            objectTypeLabel.setText("当前对象类型：--");
+             appendStatus("已加载 " + schema + " 下表/视图：" + tables.size() + " 个");
+         });
+     }
+@@ -886,8 +1358,15 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 columnModel.setRowCount(0);
+                 for (ColumnInfo column : columns) {
+                     columnModel.addRow(new Object[] {
+-                            column.name(), column.typeName(), column.size(), column.nullable()});
++                            column.name(),
++                            column.typeName(),
++                            column.size(),
++                            column.nullable() ? "是" : "否",
++                            blankToDash(column.defaultValue()),
++                            blankToDash(column.remarks())});
+                 }
++                objectTypeLabel.setText("当前对象类型：" + String.valueOf(
++                        browserTableModel.getValueAt(browserTable.convertRowIndexToModel(row), 2)));
+                 appendStatus("已加载字段：" + schema + "." + table + " / " + columns.size() + " 个");
+             });
+         });
+@@ -908,6 +1387,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+             for (List<String> previewRow : preview.rows()) {
+                 previewModel.addRow(previewRow.toArray());
+             }
++            objectTypeLabel.setText("当前对象类型：预览 " + preview.rows().size() + " 行");
+             appendStatus("已预览：" + schema + "." + table + " / " + preview.rows().size() + " 行");
+         });
+     }
+@@ -923,6 +1403,8 @@ public final class ShelfPointMonitorApp extends JFrame {
+     private void loadGroupConfig() {
+         pointGroups = new ArrayList<>(groupConfigStore.load());
+         refreshGroupList(pointGroups.isEmpty() ? "" : pointGroups.get(0).id());
++        refreshOverviewPage();
++        refreshAlertCenterPage();
+     }
+
+     private void refreshGroupList(String selectedId) {
+@@ -1113,12 +1595,25 @@ public final class ShelfPointMonitorApp extends JFrame {
+             groupConfigStore.save(groups);
+             pointGroups = new ArrayList<>(groups);
+             refreshGroupList(pointGroups.get(0).id());
++            refreshOverviewPage();
++            refreshAlertCenterPage();
+             appendStatus("点位组配置已保存。数据库密码未保存。");
+         } catch (Exception ex) {
+             showError(ex);
+         }
+     }
+
++    private void validateGroupConfigFromUi() {
++        try {
++            List<PointGroupDefinition> groups = readGroups();
++            GroupConfigStore.validateGroups(groups);
++            appendStatus("点位组配置验证通过，共 " + groups.size() + " 个点位组。");
++            JOptionPane.showMessageDialog(this, "配置验证通过。", "验证配置", JOptionPane.INFORMATION_MESSAGE);
++        } catch (Exception ex) {
++            showError(ex);
++        }
++    }
++
+     private void checkNow() {
+         try {
+             DbConfig config = requireCurrentConfig(60);
+@@ -1193,7 +1688,19 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 records = fetcher.fetch(group);
+             } catch (Exception ex) {
+                 failedGroups++;
+-                appendStatus(source + "失败，点位组 " + group.id() + " 数据库查询失败：" + ex.getMessage());
++                String errorSummary = queryFailureMessage(ex);
++                GroupEvaluation evaluation;
++                synchronized (groupMonitorLock) {
++                    evaluation = GroupMonitorLogic.queryFailed(group, state, now, errorSummary);
++                }
++                appendCheckLog(now, evaluation);
++                appendGroupEvents(now, evaluation);
++                evaluations.add(evaluation);
++                recordLatestEvaluation(evaluation);
++                closeActiveGroupAlertDialogIfOwnedBy(group.id());
++                updateSelectedGroupBoard(evaluation);
++                runtime.append(formatGroupCheckResult(source, List.of(), evaluation)).append(System.lineSeparator());
++                appendStatus(source + "失败，点位组 " + group.id() + " " + errorSummary);
+                 continue;
+             }
+             GroupEvaluation evaluation;
+@@ -1203,21 +1710,40 @@ public final class ShelfPointMonitorApp extends JFrame {
+             appendCheckLog(now, evaluation);
+             appendGroupEvents(now, evaluation);
+             evaluations.add(evaluation);
++            recordLatestEvaluation(evaluation);
+             updateSelectedGroupBoard(evaluation);
+             runtime.append(formatGroupCheckResult(source, records, evaluation)).append(System.lineSeparator());
+             checkedGroups++;
+             if (evaluation.shouldShowDialog() && !dialogRequested) {
+-                showGroupAlertDialog(evaluation);
+-                dialogRequested = true;
++                if (uiPreferences.alertPopupEnabled()) {
++                    showGroupAlertDialog(evaluation);
++                    dialogRequested = true;
++                } else {
++                    appendStatus("报警弹窗已在系统设置中关闭，本次只记录状态和事件：" + evaluation.groupId());
++                }
+             }
+         }
+         String runtimeText = runtime.toString();
+-        SwingUtilities.invokeLater(() -> groupRuntimeArea.setText(runtimeText));
++        SwingUtilities.invokeLater(() -> {
++            groupRuntimeArea.setText(runtimeText);
++            lastCheckLabel.setText("上次检测：" + TIME_FORMAT.format(now));
++            nextCheckLabel.setText(scheduledTask == null
++                    ? "下次检测：--"
++                    : "下次检测：" + TIME_FORMAT.format(now.plusSeconds(10)));
++            refreshOverviewPage();
++            refreshAlertCenterPage();
++        });
+         appendStatus(source + "完成，点位组 " + checkedGroups + " 个"
+                 + (failedGroups > 0 ? "，失败 " + failedGroups + " 个" : "") + "。");
+         return new GroupCheckRunResult(checkedGroups, failedGroups, dialogRequested, evaluations);
+     }
+
++    private void recordLatestEvaluation(GroupEvaluation evaluation) {
++        synchronized (groupMonitorLock) {
++            lastGroupEvaluations.put(evaluation.groupId(), evaluation);
++        }
++    }
++
+     private void updateSelectedGroupBoard(GroupEvaluation evaluation) {
+         SwingUtilities.invokeLater(() -> {
+             if (!evaluation.groupId().equals(selectedGroupId())) {
+@@ -1265,12 +1791,23 @@ public final class ShelfPointMonitorApp extends JFrame {
+             lastGroupStatuses.put(evaluation.groupId(), evaluation.status());
+         }
+         try {
+-            if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
+-                    && previous != GroupAlertStatus.ACTIVE_ALERT
+-                    && previous != GroupAlertStatus.ACKED_ALERT) {
+-                groupLogWriter.appendEvent(now, "ALERT_OPEN", evaluation);
+-            } else if (evaluation.status() == GroupAlertStatus.NORMAL && previous != GroupAlertStatus.NORMAL) {
+-                groupLogWriter.appendEvent(now, "RECOVERED", evaluation);
++            if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++                if (previous != GroupAlertStatus.QUERY_FAILED) {
++                    groupLogWriter.appendEvent(now, "QUERY_FAILED", evaluation);
++                }
++            } else {
++                if (previous == GroupAlertStatus.QUERY_FAILED) {
++                    groupLogWriter.appendEvent(now, "QUERY_RECOVERED", evaluation);
++                }
++                if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
++                        && previous != GroupAlertStatus.ACTIVE_ALERT
++                        && previous != GroupAlertStatus.ACKED_ALERT) {
++                    groupLogWriter.appendEvent(now, "ALERT_OPEN", evaluation);
++                } else if (evaluation.status() == GroupAlertStatus.NORMAL
++                        && previous != GroupAlertStatus.NORMAL
++                        && previous != GroupAlertStatus.QUERY_FAILED) {
++                    groupLogWriter.appendEvent(now, "RECOVERED", evaluation);
++                }
+             }
+         } catch (Exception ex) {
+             appendStatus("CSV事件日志写入失败：" + ex.getMessage());
+@@ -1286,6 +1823,27 @@ public final class ShelfPointMonitorApp extends JFrame {
+         constraints.weightx = 1.0;
+         constraints.weighty = 0.0;
+
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++            JPanel card = new JPanel(new GridLayout(0, 1, 4, 4));
++            card.setBackground(new Color(255, 250, 230));
++            card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
++                    javax.swing.BorderFactory.createLineBorder(new Color(190, 120, 30), 2),
++                    javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12)));
++            JLabel title = new JLabel("查询失败");
++            title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
++            title.setForeground(new Color(160, 92, 20));
++            card.add(title);
++            card.add(new JLabel(evaluation.message()));
++            card.add(new JLabel("本次未获得点位状态，不按无料处理。"));
++            constraints.gridx = 0;
++            constraints.gridy = 0;
++            constraints.gridwidth = 4;
++            pointStatusPanel.add(card, constraints);
++            pointStatusPanel.revalidate();
++            pointStatusPanel.repaint();
++            return;
++        }
++
+         List<PointStatusView> usePoints = new ArrayList<>();
+         List<PointStatusView> backupPoints = new ArrayList<>();
+         for (PointStatusView point : evaluation.pointStatuses()) {
+@@ -1361,17 +1919,24 @@ public final class ShelfPointMonitorApp extends JFrame {
+     }
+
+     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
+-        String message = GroupStatusText.summary(
+-                evaluation.areaName(),
+-                evaluation.groupName(),
+-                evaluation.materialName(),
+-                evaluation.status(),
+-                evaluation.usePointEmpty(),
+-                evaluation.backupTotal(),
+-                evaluation.backupAvailableCount(),
+-                evaluation.continuousMatchedSeconds(),
+-                evaluation.alertDurationSeconds(),
+-                evaluation.pointStatuses());
++        String message;
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED
++                && evaluation.message() != null
++                && !evaluation.message().isBlank()) {
++            message = evaluation.message();
++        } else {
++            message = GroupStatusText.summary(
++                    evaluation.areaName(),
++                    evaluation.groupName(),
++                    evaluation.materialName(),
++                    evaluation.status(),
++                    evaluation.usePointEmpty(),
++                    evaluation.backupTotal(),
++                    evaluation.backupAvailableCount(),
++                    evaluation.continuousMatchedSeconds(),
++                    evaluation.alertDurationSeconds(),
++                    evaluation.pointStatuses());
++        }
+         return TIME_FORMAT.format(LocalDateTime.now())
+                 + " "
+                 + GroupStatusText.statusText(evaluation.status())
+@@ -1379,6 +1944,47 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 + message;
+     }
+
++    private static String queryFailureMessage(Exception ex) {
++        return "查询失败：" + sanitizedExceptionSummary(ex);
++    }
++
++    private static String sanitizedExceptionSummary(Exception ex) {
++        String raw = ex == null ? "" : ex.getMessage();
++        if (raw == null || raw.isBlank()) {
++            raw = ex == null ? "未知错误" : ex.getClass().getSimpleName();
++        } else if (ex != null) {
++            raw = ex.getClass().getSimpleName() + ": " + raw;
++        }
++        String safe = raw.replace('\r', ' ').replace('\n', ' ');
++        safe = safe.replaceAll("(?i)jdbc:[^\\s,;]+", "jdbc:***");
++        safe = safe.replaceAll("(?i)((?:password|passwd|pwd|token|access_token|secret)\\s*[=:]\\s*)[^\\s,;]+",
++                "$1***");
++        safe = safe.replaceAll("(?i)((?:user\\s*id|uid|user(?:name)?|role)\\s*[=:]\\s*)[^\\s,;]+",
++                "$1***");
++        safe = safe.replaceAll("(?i)user\\s+\"[^\"]+\"", "user ***");
++        safe = safe.replaceAll("(?i)user\\s+'[^']+'", "user ***");
++        safe = safe.replaceAll("(?i)role\\s+\"[^\"]+\"", "role ***");
++        safe = safe.replaceAll("(?i)role\\s+'[^']+'", "role ***");
++        safe = safe.replaceAll("\\bat\\s+[A-Za-z0-9_.$]+\\([^)]*\\)", "");
++        safe = safe.replaceAll("[A-Za-z0-9_.$-]+\\.java:\\d+", "***.java:***");
++        safe = safe.replaceAll("\\s+", " ").trim();
++        if (safe.length() > 180) {
++            safe = safe.substring(0, 177) + "...";
++        }
++        return safe.isBlank() ? "未知错误" : safe;
++    }
++
++    private void closeActiveGroupAlertDialogIfOwnedBy(String groupId) {
++        SwingUtilities.invokeLater(() -> {
++            if (activeDialog == null || groupId == null || !groupId.equals(activeDialogGroupId)) {
++                return;
++            }
++            activeDialog.dispose();
++            activeDialog = null;
++            activeDialogGroupId = "";
++        });
++    }
++
+     private void startMonitoring() {
+         try {
+             DbConfig config = requireCurrentConfig(60);
+@@ -1394,6 +2000,8 @@ public final class ShelfPointMonitorApp extends JFrame {
+                     TimeUnit.SECONDS);
+             startButton.setEnabled(false);
+             stopButton.setEnabled(true);
++            monitorStatusLabel.setText("监控状态：运行中");
++            nextCheckLabel.setText("下次检测：" + TIME_FORMAT.format(LocalDateTime.now().plusSeconds(10)));
+             appendStatus("已开始点位组监控。系统每 10 秒扫描到期点位组，各组按自身检测周期查询数据库。");
+         } catch (Exception ex) {
+             showError(ex);
+@@ -1409,13 +2017,18 @@ public final class ShelfPointMonitorApp extends JFrame {
+         clearGroupMonitorState();
+         startButton.setEnabled(true);
+         stopButton.setEnabled(false);
++        monitorStatusLabel.setText("监控状态：未运行");
++        nextCheckLabel.setText("下次检测：--");
+     }
+
+     private void clearGroupMonitorState() {
+         synchronized (groupMonitorLock) {
+             groupStates.clear();
+             lastGroupStatuses.clear();
++            lastGroupEvaluations.clear();
+         }
++        refreshOverviewPage();
++        refreshAlertCenterPage();
+     }
+
+     private void showGroupAlertDialog(GroupEvaluation evaluation) {
+@@ -1423,6 +2036,9 @@ public final class ShelfPointMonitorApp extends JFrame {
+             if (activeDialog != null && activeDialog.isShowing()) {
+                 return;
+             }
++            if (uiPreferences.alertSoundEnabled()) {
++                Toolkit.getDefaultToolkit().beep();
++            }
+             JDialog dialog = new JDialog(this, "点位组缺料报警", false);
+             dialog.setAlwaysOnTop(true);
+             dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+@@ -1440,11 +2056,13 @@ public final class ShelfPointMonitorApp extends JFrame {
+             dialog.add(buildGroupAlertButtons(evaluation, () -> {
+                 dialog.dispose();
+                 activeDialog = null;
++                activeDialogGroupId = "";
+             }), BorderLayout.SOUTH);
+
+             dialog.setSize(640, 420);
+             dialog.setLocationRelativeTo(this);
+             activeDialog = dialog;
++            activeDialogGroupId = evaluation.groupId();
+             dialog.setVisible(true);
+         });
+     }
+@@ -1558,6 +2176,762 @@ public final class ShelfPointMonitorApp extends JFrame {
+         return "点位";
+     }
+
++    private void refreshOverviewPage() {
++        if (!SwingUtilities.isEventDispatchThread()) {
++            SwingUtilities.invokeLater(this::refreshOverviewPage);
++            return;
++        }
++        List<PointGroupDefinition> groups = new ArrayList<>(pointGroups);
++        groups.sort(Comparator
++                .comparingInt((PointGroupDefinition group) -> statusPriority(groupStatus(group)))
++                .thenComparing(PointGroupDefinition::areaName)
++                .thenComparing(PointGroupDefinition::groupName));
++
++        int alertCount = 0;
++        int pendingCount = 0;
++        int dataErrorCount = 0;
++        overviewModel.setRowCount(0);
++        for (PointGroupDefinition group : groups) {
++            GroupEvaluation evaluation = latestEvaluation(group.id());
++            GroupAlertStatus status = groupStatus(group);
++            if (status == GroupAlertStatus.ACTIVE_ALERT || status == GroupAlertStatus.ACKED_ALERT) {
++                alertCount++;
++            } else if (status == GroupAlertStatus.PENDING_ALERT) {
++                pendingCount++;
++            } else if (status == GroupAlertStatus.QUERY_FAILED) {
++                dataErrorCount++;
++            }
++            overviewModel.addRow(new Object[] {
++                    statusTextForOverview(group, status),
++                    group.areaName(),
++                    group.groupName(),
++                    useStateText(evaluation),
++                    backupStateText(evaluation, group),
++                    durationText(evaluation),
++                    lastCheckedText(group.id())
++            });
++        }
++        overviewGroupCountLabel.setText(String.valueOf(groups.size()));
++        overviewAlertCountLabel.setText(String.valueOf(alertCount));
++        overviewPendingCountLabel.setText(String.valueOf(pendingCount));
++        overviewDataErrorCountLabel.setText(String.valueOf(dataErrorCount));
++        if (overviewTable.getRowCount() > 0 && overviewTable.getSelectedRow() < 0) {
++            overviewTable.setRowSelectionInterval(0, 0);
++        }
++        updateOverviewDetail();
++    }
++
++    private GroupAlertStatus groupStatus(PointGroupDefinition group) {
++        if (!group.enabled()) {
++            return GroupAlertStatus.NORMAL;
++        }
++        GroupEvaluation evaluation = latestEvaluation(group.id());
++        return evaluation == null ? GroupAlertStatus.NORMAL : evaluation.status();
++    }
++
++    private GroupEvaluation latestEvaluation(String groupId) {
++        synchronized (groupMonitorLock) {
++            return lastGroupEvaluations.get(groupId);
++        }
++    }
++
++    private int statusPriority(GroupAlertStatus status) {
++        if (status == GroupAlertStatus.ACTIVE_ALERT) {
++            return 0;
++        }
++        if (status == GroupAlertStatus.QUERY_FAILED) {
++            return 1;
++        }
++        if (status == GroupAlertStatus.PENDING_ALERT) {
++            return 2;
++        }
++        if (status == GroupAlertStatus.ACKED_ALERT) {
++            return 4;
++        }
++        if (status == GroupAlertStatus.NORMAL) {
++            return 5;
++        }
++        return 6;
++    }
++
++    private String statusTextForOverview(PointGroupDefinition group, GroupAlertStatus status) {
++        if (!group.enabled()) {
++            return "停用";
++        }
++        GroupEvaluation evaluation = latestEvaluation(group.id());
++        if (evaluation == null) {
++            return "未检测";
++        }
++        if (status == GroupAlertStatus.QUERY_FAILED) {
++            return "查询失败，数据不可用";
++        }
++        return GroupStatusText.statusText(status);
++    }
++
++    private String useStateText(GroupEvaluation evaluation) {
++        if (evaluation == null) {
++            return "--";
++        }
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++            return "查询失败";
++        }
++        return evaluation.usePointEmpty() ? "无料" : "有料";
++    }
++
++    private String backupStateText(GroupEvaluation evaluation, PointGroupDefinition group) {
++        if (evaluation == null) {
++            int total = 0;
++            for (GroupMonitorPoint point : group.points()) {
++                if (point.enabled() && point.role() == PointRole.BACKUP) {
++                    total++;
++                }
++            }
++            return "--/" + total;
++        }
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++            return "数据不可用";
++        }
++        return evaluation.backupAvailableCount() + "/" + evaluation.backupTotal();
++    }
++
++    private String durationText(GroupEvaluation evaluation) {
++        if (evaluation == null) {
++            return "--";
++        }
++        return evaluation.continuousMatchedMinutes() + " 分钟";
++    }
++
++    private String lastCheckedText(String groupId) {
++        synchronized (groupMonitorLock) {
++            GroupRuntimeState state = groupStates.get(groupId);
++            if (state == null || state.lastCheckedAt() == null) {
++                return "--";
++            }
++            return TIME_FORMAT.format(state.lastCheckedAt());
++        }
++    }
++
++    private void updateOverviewDetail() {
++        int row = overviewTable.getSelectedRow();
++        if (row < 0) {
++            overviewDetailArea.setText("请选择点位组。");
++            return;
++        }
++        PointGroupDefinition group = findGroupByOverviewRow(row);
++        if (group == null) {
++            overviewDetailArea.setText("未找到对应点位组。");
++            return;
++        }
++        GroupEvaluation evaluation = latestEvaluation(group.id());
++        StringBuilder text = new StringBuilder();
++        text.append("区域 / 物料组：").append(group.areaName()).append(" / ").append(group.groupName()).append(System.lineSeparator());
++        text.append("当前状态：").append(statusTextForOverview(group, groupStatus(group))).append(System.lineSeparator());
++        text.append("规则摘要：使用位无货架=")
++                .append(group.rule().requireUsePointEmpty() ? "是" : "否")
++                .append("，最少备用位有料 ")
++                .append(group.rule().minBackupAvailable())
++                .append("，持续 ")
++                .append(group.rule().durationMinutes())
++                .append(" 分钟")
++                .append(System.lineSeparator());
++        text.append("持续时间：").append(durationText(evaluation)).append(System.lineSeparator());
++        text.append("上次检测：").append(lastCheckedText(group.id())).append(System.lineSeparator());
++        text.append(System.lineSeparator()).append("点位明细：").append(System.lineSeparator());
++        if (evaluation != null && !evaluation.pointStatuses().isEmpty()) {
++            for (PointStatusView point : evaluation.pointStatuses()) {
++                text.append(roleText(point.role()))
++                        .append(" / ")
++                        .append(point.alias())
++                        .append(" / ")
++                        .append(point.pointCode())
++                        .append(" / ")
++                        .append(point.statusText())
++                        .append(" / ")
++                        .append(point.updatedAt() == null ? "--" : TIME_FORMAT.format(point.updatedAt()))
++                        .append(System.lineSeparator());
++            }
++        } else {
++            for (GroupMonitorPoint point : group.points()) {
++                text.append(roleText(point.role()))
++                        .append(" / ")
++                        .append(point.alias())
++                        .append(" / ")
++                        .append(point.code())
++                        .append(" / 未检测 / --")
++                        .append(System.lineSeparator());
++            }
++        }
++        overviewDetailArea.setText(text.toString());
++    }
++
++    private PointGroupDefinition findGroupByOverviewRow(int viewRow) {
++        int row = overviewTable.convertRowIndexToModel(viewRow);
++        String area = String.valueOf(overviewModel.getValueAt(row, 1));
++        String groupName = String.valueOf(overviewModel.getValueAt(row, 2));
++        for (PointGroupDefinition group : pointGroups) {
++            if (group.areaName().equals(area) && group.groupName().equals(groupName)) {
++                return group;
++            }
++        }
++        return null;
++    }
++
++    private void acknowledgeSelectedOverviewAlert() {
++        PointGroupDefinition group = findGroupByOverviewRow(overviewTable.getSelectedRow());
++        if (group == null) {
++            showError(new IllegalArgumentException("请先选择点位组"));
++            return;
++        }
++        GroupEvaluation evaluation = latestEvaluation(group.id());
++        if (evaluation == null || evaluation.status() != GroupAlertStatus.ACTIVE_ALERT) {
++            showError(new IllegalArgumentException("当前点位组没有可关注的缺料报警"));
++            return;
++        }
++        acknowledgeGroupAlert(evaluation);
++        refreshOverviewPage();
++        refreshAlertCenterPage();
++    }
++
++    private void refreshAlertCenterPage() {
++        if (!SwingUtilities.isEventDispatchThread()) {
++            SwingUtilities.invokeLater(this::refreshAlertCenterPage);
++            return;
++        }
++        alertCenterModel.setRowCount(0);
++        String filter = String.valueOf(alertCenterFilterBox.getSelectedItem());
++        synchronized (groupMonitorLock) {
++            for (GroupEvaluation evaluation : lastGroupEvaluations.values()) {
++                if (!matchesAlertFilter(filter, evaluation.status())) {
++                    continue;
++                }
++                alertCenterModel.addRow(new Object[] {
++                        lastCheckedText(evaluation.groupId()),
++                        evaluation.areaName(),
++                        evaluation.groupName(),
++                        alertReason(evaluation),
++                        durationText(evaluation),
++                        GroupStatusText.statusText(evaluation.status())
++                });
++            }
++        }
++        loadEventLogRowsIntoAlertCenter(filter);
++        if (alertCenterTable.getRowCount() > 0 && alertCenterTable.getSelectedRow() < 0) {
++            alertCenterTable.setRowSelectionInterval(0, 0);
++        }
++        updateAlertCenterDetail();
++    }
++
++    private boolean matchesAlertFilter(String filter, GroupAlertStatus status) {
++        if ("活跃报警".equals(filter)) {
++            return status == GroupAlertStatus.ACTIVE_ALERT;
++        }
++        if ("已关注".equals(filter)) {
++            return status == GroupAlertStatus.ACKED_ALERT;
++        }
++        if ("观察中".equals(filter)) {
++            return status == GroupAlertStatus.PENDING_ALERT;
++        }
++        if ("查询失败".equals(filter)) {
++            return status == GroupAlertStatus.QUERY_FAILED;
++        }
++        if ("已恢复".equals(filter)) {
++            return status == GroupAlertStatus.NORMAL;
++        }
++        return true;
++    }
++
++    private String alertReason(GroupEvaluation evaluation) {
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++            return "查询失败：" + safeMessage(evaluation.message());
++        }
++        if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT) {
++            return "缺料报警：" + safeMessage(evaluation.message());
++        }
++        if (evaluation.status() == GroupAlertStatus.ACKED_ALERT) {
++            return "已关注，等待实际恢复";
++        }
++        return safeMessage(evaluation.message());
++    }
++
++    private String safeMessage(String message) {
++        return message == null || message.isBlank() ? GroupStatusText.statusText(GroupAlertStatus.NORMAL) : message;
++    }
++
++    private void loadEventLogRowsIntoAlertCenter(String filter) {
++        Path eventLog = Paths.get("logs", "event-log.csv");
++        if (!Files.exists(eventLog)) {
++            return;
++        }
++        try {
++            List<String> lines = Files.readAllLines(eventLog, StandardCharsets.UTF_8);
++            for (int i = 1; i < lines.size(); i++) {
++                List<String> columns = parseCsvLine(lines.get(i));
++                if (columns.size() < 8) {
++                    continue;
++                }
++                String eventType = eventTypeText(columns.get(1));
++                GroupAlertStatus status = parseStatus(columns.get(6));
++                if (!matchesAlertFilter(filter, status)) {
++                    continue;
++                }
++                alertCenterModel.addRow(new Object[] {
++                        columns.get(0),
++                        columns.get(3),
++                        columns.get(4),
++                        eventType + "：" + sanitizeVisibleLog(columns.get(7)),
++                        "--",
++                        GroupStatusText.statusText(status)
++                });
++            }
++        } catch (Exception ex) {
++            appendStatus("读取报警事件日志失败：" + sanitizedExceptionSummary(ex));
++        }
++    }
++
++    private GroupAlertStatus parseStatus(String value) {
++        try {
++            return GroupAlertStatus.valueOf(value);
++        } catch (Exception ignored) {
++            return GroupAlertStatus.NORMAL;
++        }
++    }
++
++    private void updateAlertCenterDetail() {
++        int row = alertCenterTable.getSelectedRow();
++        if (row < 0) {
++            alertCenterDetailArea.setText("当前无报警事件。查询失败属于系统数据异常，不属于缺料报警。");
++            return;
++        }
++        int modelRow = alertCenterTable.convertRowIndexToModel(row);
++        StringBuilder text = new StringBuilder();
++        text.append("当前状态：").append(alertCenterModel.getValueAt(modelRow, 5)).append(System.lineSeparator());
++        text.append("触发时间：").append(alertCenterModel.getValueAt(modelRow, 0)).append(System.lineSeparator());
++        text.append("持续时间：").append(alertCenterModel.getValueAt(modelRow, 4)).append(System.lineSeparator());
++        text.append("规则命中内容：").append(alertCenterModel.getValueAt(modelRow, 3)).append(System.lineSeparator());
++        text.append("点位明细：请在监控总览查看当前点位状态。").append(System.lineSeparator());
++        text.append("处理时间线：事件来自本地 event-log.csv 和本次运行检测结果。");
++        alertCenterDetailArea.setText(text.toString());
++    }
++
++    private void acknowledgeSelectedAlertCenterGroup() {
++        GroupEvaluation evaluation = selectedAlertCenterEvaluation();
++        if (evaluation == null || evaluation.status() != GroupAlertStatus.ACTIVE_ALERT) {
++            showError(new IllegalArgumentException("查询失败或非活跃缺料报警不能标记为已关注"));
++            return;
++        }
++        acknowledgeGroupAlert(evaluation);
++        refreshAlertCenterPage();
++    }
++
++    private void checkSelectedAlertCenterGroup() {
++        GroupEvaluation evaluation = selectedAlertCenterEvaluation();
++        if (evaluation == null) {
++            showError(new IllegalArgumentException("请先选择当前运行中的点位组事件"));
++            return;
++        }
++        PointGroupDefinition group = findGroupById(evaluation.groupId());
++        if (group == null) {
++            showError(new IllegalArgumentException("未找到点位组配置"));
++            return;
++        }
++        try {
++            DbConfig config = requireCurrentConfig(60);
++            char[] passwordSnapshot = Arrays.copyOf(currentPassword, currentPassword.length);
++            runOnceInBackground(() -> checkGroups(config, passwordSnapshot, List.of(group), LocalDateTime.now(), "手动检测"));
++        } catch (Exception ex) {
++            showError(ex);
++        }
++    }
++
++    private GroupEvaluation selectedAlertCenterEvaluation() {
++        int row = alertCenterTable.getSelectedRow();
++        if (row < 0) {
++            return null;
++        }
++        int modelRow = alertCenterTable.convertRowIndexToModel(row);
++        String area = String.valueOf(alertCenterModel.getValueAt(modelRow, 1));
++        String groupName = String.valueOf(alertCenterModel.getValueAt(modelRow, 2));
++        synchronized (groupMonitorLock) {
++            for (GroupEvaluation evaluation : lastGroupEvaluations.values()) {
++                if (evaluation.areaName().equals(area) && evaluation.groupName().equals(groupName)) {
++                    return evaluation;
++                }
++            }
++        }
++        return null;
++    }
++
++    private PointGroupDefinition findGroupById(String groupId) {
++        for (PointGroupDefinition group : pointGroups) {
++            if (group.id().equals(groupId)) {
++                return group;
++            }
++        }
++        return null;
++    }
++
++    private void executePointDataQuery() throws Exception {
++        DbConfig config = requireCurrentConfig(30);
++        PointDataQuery query = new PointDataQuery(
++                queryPointKeywordField.getText(),
++                queryShelfKeywordField.getText(),
++                queryAreaCodeField.getText(),
++                queryRelateAreaCodeField.getText(),
++                queryUpdatedFromField.getText(),
++                queryUpdatedToField.getText(),
++                (Integer) queryLimitSpinner.getValue(),
++                0);
++        PointDataQueryResult result = pointDataQueryRepository.query(config, currentPassword, query);
++        SwingUtilities.invokeLater(() -> {
++            dataQueryModel.setRowCount(0);
++            for (PointRecord record : result.records()) {
++                dataQueryModel.addRow(new Object[] {
++                        record.mapDataCode(),
++                        blankToDash(record.podCode()),
++                        blankToDash(record.podStatus()),
++                        materialText(record),
++                        record.indLock() == 0 ? "未锁定" : "锁定",
++                        blankToDash(record.areaCode()),
++                        blankToDash(record.relateAreaCode()),
++                        record.dateChg() == null ? "--" : TIME_FORMAT.format(record.dateChg()),
++                        "成功"
++                });
++            }
++            dataQueryDetailArea.setText("只读查询完成，返回 " + result.records().size()
++                    + " 行。\nSQL类型：" + result.sqlKind()
++                    + "\n固定来源：tcs_map_data\n不支持 SQL 编辑\n不支持数据修改");
++            appendStatus("结构化只读查询完成，返回 " + result.records().size() + " 行。");
++        });
++    }
++
++    private String materialText(PointRecord record) {
++        if (MonitorLogic.isBlank(record.podCode())) {
++            return "无料";
++        }
++        if (record.status() != 1 || record.indLock() != 0) {
++            return "异常";
++        }
++        return "有料";
++    }
++
++    private String blankToDash(String value) {
++        return value == null || value.isBlank() ? "--" : value;
++    }
++
++    private void updateDataQueryDetail() {
++        int row = dataQueryTable.getSelectedRow();
++        if (row < 0) {
++            return;
++        }
++        int modelRow = dataQueryTable.convertRowIndexToModel(row);
++        StringBuilder text = new StringBuilder("选中记录字段：").append(System.lineSeparator());
++        for (int i = 0; i < dataQueryModel.getColumnCount(); i++) {
++            text.append(dataQueryModel.getColumnName(i))
++                    .append("：")
++                    .append(dataQueryModel.getValueAt(modelRow, i))
++                    .append(System.lineSeparator());
++        }
++        text.append(System.lineSeparator())
++                .append("只读查询").append(System.lineSeparator())
++                .append("不支持 SQL 编辑").append(System.lineSeparator())
++                .append("不支持数据修改");
++        dataQueryDetailArea.setText(text.toString());
++    }
++
++    private void loadSystemLogs() {
++        if (!SwingUtilities.isEventDispatchThread()) {
++            SwingUtilities.invokeLater(this::loadSystemLogs);
++            return;
++        }
++        systemLogModel.setRowCount(0);
++        appendSystemLogRows(Paths.get("logs", "event-log.csv"), "事件日志");
++        appendSystemLogRows(Paths.get("logs", "check-log.csv"), "检测日志");
++        appendMonitorLogRows();
++        if (systemLogTable.getRowCount() > 0 && systemLogTable.getSelectedRow() < 0) {
++            systemLogTable.setRowSelectionInterval(0, 0);
++        }
++        updateSystemLogDetail();
++    }
++
++    private void appendSystemLogRows(Path path, String source) {
++        if (!Files.exists(path)) {
++            return;
++        }
++        try {
++            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
++            for (int i = 1; i < lines.size(); i++) {
++                List<String> columns = parseCsvLine(lines.get(i));
++                if (columns.size() < 2) {
++                    continue;
++                }
++                String type = source.equals("事件日志") ? eventTypeText(columns.get(1)) : "检测完成";
++                String groupId = columns.size() > 2 ? columns.get(2) : "";
++                String description = columns.isEmpty() ? "" : columns.get(columns.size() - 1);
++                addSystemLogRow(columns.get(0), type, "信息", groupId, sanitizeVisibleLog(description), source);
++            }
++        } catch (Exception ex) {
++            addSystemLogRow(TIME_FORMAT.format(LocalDateTime.now()), "日志读取失败", "警告", "",
++                    sanitizedExceptionSummary(ex), source);
++        }
++    }
++
++    private void appendMonitorLogRows() {
++        if (!Files.exists(logPath)) {
++            return;
++        }
++        try {
++            List<String> lines = Files.readAllLines(logPath, StandardCharsets.UTF_8);
++            int start = Math.max(0, lines.size() - 200);
++            for (int i = start; i < lines.size(); i++) {
++                addSystemLogRow("", "运行日志", "信息", "", sanitizeVisibleLog(lines.get(i)), "monitor.log");
++            }
++        } catch (Exception ex) {
++            addSystemLogRow(TIME_FORMAT.format(LocalDateTime.now()), "日志读取失败", "警告", "",
++                    sanitizedExceptionSummary(ex), "monitor.log");
++        }
++    }
++
++    private void addSystemLogRow(String time, String type, String level, String groupId, String description, String source) {
++        String selectedType = String.valueOf(systemLogTypeFilterBox.getSelectedItem());
++        String keyword = systemLogKeywordField.getText().trim();
++        String from = systemLogFromField.getText().trim();
++        String to = systemLogToField.getText().trim();
++        String groupFilter = systemLogGroupField.getText().trim();
++        if (!"全部".equals(selectedType) && !selectedType.equals(type)) {
++            return;
++        }
++        if (!groupFilter.isBlank() && !groupId.contains(groupFilter)) {
++            return;
++        }
++        if (!from.isBlank() && !time.isBlank() && time.compareTo(from) < 0) {
++            return;
++        }
++        if (!to.isBlank() && !time.isBlank() && time.compareTo(to) > 0) {
++            return;
++        }
++        String combined = time + " " + type + " " + groupId + " " + description + " " + source;
++        if (!keyword.isBlank() && !combined.contains(keyword)) {
++            return;
++        }
++        systemLogModel.addRow(new Object[] {time, type, level, groupId, description, source});
++    }
++
++    private String eventTypeText(String eventType) {
++        if ("ALERT_OPEN".equals(eventType)) {
++            return "报警触发";
++        }
++        if ("ACKNOWLEDGED".equals(eventType)) {
++            return "已关注";
++        }
++        if ("RECOVERED".equals(eventType)) {
++            return "恢复";
++        }
++        if ("QUERY_FAILED".equals(eventType)) {
++            return "查询失败";
++        }
++        if ("QUERY_RECOVERED".equals(eventType)) {
++            return "查询恢复";
++        }
++        return eventType == null || eventType.isBlank() ? "检测完成" : eventType;
++    }
++
++    private void updateSystemLogDetail() {
++        int row = systemLogTable.getSelectedRow();
++        if (row < 0) {
++            systemLogDetailArea.setText("暂无日志记录。");
++            return;
++        }
++        int modelRow = systemLogTable.convertRowIndexToModel(row);
++        StringBuilder text = new StringBuilder();
++        for (int i = 0; i < systemLogModel.getColumnCount(); i++) {
++            text.append(systemLogModel.getColumnName(i))
++                    .append("：")
++                    .append(systemLogModel.getValueAt(modelRow, i))
++                    .append(System.lineSeparator());
++        }
++        systemLogDetailArea.setText(text.toString());
++    }
++
++    private static List<String> parseCsvLine(String line) {
++        List<String> values = new ArrayList<>();
++        StringBuilder current = new StringBuilder();
++        boolean quoted = false;
++        for (int i = 0; i < line.length(); i++) {
++            char ch = line.charAt(i);
++            if (ch == '"') {
++                if (quoted && i + 1 < line.length() && line.charAt(i + 1) == '"') {
++                    current.append('"');
++                    i++;
++                } else {
++                    quoted = !quoted;
++                }
++            } else if (ch == ',' && !quoted) {
++                values.add(current.toString());
++                current.setLength(0);
++            } else {
++                current.append(ch);
++            }
++        }
++        values.add(current.toString());
++        return values;
++    }
++
++    private static String sanitizeVisibleLog(String text) {
++        if (text == null) {
++            return "";
++        }
++        String safe = text.replaceAll("(?i)jdbc:[^\\s,;]+", "jdbc:***");
++        safe = safe.replaceAll("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", "***.***.***.***");
++        safe = safe.replaceAll("[A-Za-z]:\\\\[^\\s,;]+", "<本地路径>");
++        safe = safe.replaceAll("(?i)((?:password|passwd|pwd|token|access_token|secret)\\s*[=:]\\s*)[^\\s,;]+",
++                "$1***");
++        safe = safe.replaceAll("(?i)((?:user\\s*id|uid|user(?:name)?|role)\\s*[=:]\\s*)[^\\s,;]+",
++                "$1***");
++        safe = safe.replaceAll("(?i)user\\s+\"[^\"]+\"", "user ***");
++        safe = safe.replaceAll("(?i)role\\s+\"[^\"]+\"", "role ***");
++        safe = safe.replaceAll("\\bat\\s+[A-Za-z0-9_.$]+\\([^)]*\\)", "");
++        safe = safe.replaceAll("[A-Za-z0-9_.$-]+\\.java:\\d+", "***.java:***");
++        return safe.replaceAll("\\s+", " ").trim();
++    }
++
++    private void executeSelfTestFromUi() throws Exception {
++        runSelfTest(resolveSelfTestAppRoot());
++        SwingUtilities.invokeLater(() -> appendStatus("自检通过。"));
++    }
++
++    private void exportDiagnostics() {
++        try {
++            Files.createDirectories(Paths.get("diagnostics"));
++            Path file = Paths.get("diagnostics", "diagnostic-" + System.currentTimeMillis() + ".txt");
++            String content = "只读业务数据库工具诊断信息" + System.lineSeparator()
++                    + "time=" + TIME_FORMAT.format(LocalDateTime.now()) + System.lineSeparator()
++                    + "monitor=" + monitorStatusLabel.getText() + System.lineSeparator()
++                    + "connection=" + sanitizeVisibleLog(currentConnectionLabel.getText()) + System.lineSeparator()
++                    + "groups=" + pointGroups.size() + System.lineSeparator();
++            Files.writeString(file, content, StandardCharsets.UTF_8);
++            appendStatus("诊断信息已导出：" + file.getFileName());
++        } catch (Exception ex) {
++            showError(ex);
++        }
++    }
++
++    private void loadSettingsForm() {
++        settingsDefaultPageBox.setSelectedItem(uiPreferences.defaultPage());
++        settingsOverviewRefreshSpinner.setValue(uiPreferences.overviewRefreshSeconds());
++        settingsAlertPopupBox.setSelected(uiPreferences.alertPopupEnabled());
++        settingsAlertSoundBox.setSelected(uiPreferences.alertSoundEnabled());
++        settingsLogRetentionSpinner.setValue(uiPreferences.logRetentionDays());
++        settingsDensityBox.setSelectedItem(uiPreferences.density());
++        settingsStartupSelfTestBox.setSelected(uiPreferences.startupSelfTestEnabled());
++        settingsAutoCleanupLogsBox.setSelected(uiPreferences.autoCleanupLogsEnabled());
++    }
++
++    private UiPreferences readSettingsForm() {
++        return new UiPreferences(
++                String.valueOf(settingsDefaultPageBox.getSelectedItem()),
++                (Integer) settingsOverviewRefreshSpinner.getValue(),
++                settingsAlertPopupBox.isSelected(),
++                settingsAlertSoundBox.isSelected(),
++                (Integer) settingsLogRetentionSpinner.getValue(),
++                String.valueOf(settingsDensityBox.getSelectedItem()),
++                settingsStartupSelfTestBox.isSelected(),
++                settingsAutoCleanupLogsBox.isSelected());
++    }
++
++    private void saveUiPreferences() {
++        try {
++            uiPreferences = readSettingsForm();
++            uiPreferencesStore.save(uiPreferences);
++            applyUiPreferences();
++            appendStatus("系统设置已保存。");
++        } catch (Exception ex) {
++            showError(ex);
++        }
++    }
++
++    private void restoreUiPreferences() {
++        try {
++            uiPreferencesStore.restoreDefaults();
++            uiPreferences = uiPreferencesStore.load();
++            loadSettingsForm();
++            applyUiPreferences();
++            appendStatus("系统设置已恢复默认。");
++        } catch (Exception ex) {
++            showError(ex);
++        }
++    }
++
++    private void reloadUiPreferences() {
++        uiPreferences = uiPreferencesStore.load();
++        loadSettingsForm();
++        applyUiPreferences();
++        appendStatus("系统设置已重新加载。");
++    }
++
++    private void applyUiPreferences() {
++        applyDensity();
++        restartOverviewRefreshTimer();
++        if (uiPreferences.autoCleanupLogsEnabled()) {
++            cleanupOldLogs();
++        }
++    }
++
++    private void applyDensity() {
++        int rowHeight;
++        if ("紧凑".equals(uiPreferences.density())) {
++            rowHeight = 22;
++        } else if ("舒适".equals(uiPreferences.density())) {
++            rowHeight = 32;
++        } else {
++            rowHeight = 26;
++        }
++        for (JTable table : List.of(
++                overviewTable,
++                alertCenterTable,
++                dataQueryTable,
++                browserTable,
++                columnTable,
++                previewTable,
++                groupPointTable,
++                systemLogTable)) {
++            table.setRowHeight(rowHeight);
++        }
++    }
++
++    private void restartOverviewRefreshTimer() {
++        if (overviewRefreshTimer != null) {
++            overviewRefreshTimer.stop();
++        }
++        overviewRefreshTimer = new Timer(uiPreferences.overviewRefreshSeconds() * 1000,
++                e -> refreshOverviewPage());
++        overviewRefreshTimer.start();
++    }
++
++    private void cleanupOldLogs() {
++        try {
++            Path logs = Paths.get("logs");
++            if (!Files.isDirectory(logs)) {
++                return;
++            }
++            long cutoff = System.currentTimeMillis() - uiPreferences.logRetentionDays() * 24L * 60L * 60L * 1000L;
++            Files.list(logs).forEach(path -> {
++                try {
++                    if (Files.isRegularFile(path) && Files.getLastModifiedTime(path).toMillis() < cutoff) {
++                        Files.deleteIfExists(path);
++                    }
++                } catch (Exception ignored) {
++                }
++            });
++        } catch (Exception ex) {
++            appendStatus("日志清理失败：" + sanitizedExceptionSummary(ex));
++        }
++    }
++
++    private void selectDefaultPage() {
++        navigationList.setSelectedValue(uiPreferences.defaultPage(), true);
++        cardLayout.show(cardPanel, uiPreferences.defaultPage());
++    }
++
+     private void loadPointConfig() {
+         ConfigStore.StoredConfig stored = configStore.load();
+         intervalSpinner.setValue(stored.intervalSeconds);
+@@ -1754,6 +3128,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 appendStatus("用户已关注报警：" + evaluation.alertKey());
+                 dialog.dispose();
+                 activeDialog = null;
++                activeDialogGroupId = "";
+             });
+             JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+             buttons.add(ack);
+@@ -1762,6 +3137,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+             dialog.setSize(520, 320);
+             dialog.setLocationRelativeTo(this);
+             activeDialog = dialog;
++            activeDialogGroupId = "";
+             dialog.setVisible(true);
+         });
+     }
+@@ -1803,9 +3179,12 @@ public final class ShelfPointMonitorApp extends JFrame {
+
+     private void appendStatus(String message) {
+         String line = "[" + TIME_FORMAT.format(LocalDateTime.now()) + "] " + message;
++        String visibleLine = sanitizeVisibleLog(line);
+         SwingUtilities.invokeLater(() -> {
+-            statusArea.append(line + System.lineSeparator());
++            bottomStatusLabel.setText(sanitizeVisibleLog(message));
++            statusArea.append(visibleLine + System.lineSeparator());
+             statusArea.setCaretPosition(statusArea.getDocument().getLength());
++            loadSystemLogs();
+         });
+         writeLog(line);
+     }
+diff --git a/src/com/local/monitor/UiPreferences.java b/src/com/local/monitor/UiPreferences.java
+new file mode 100644
+index 0000000..99250e6
+--- /dev/null
++++ b/src/com/local/monitor/UiPreferences.java
+@@ -0,0 +1,107 @@
++package com.local.monitor;
++
++import java.util.List;
++
++public final class UiPreferences {
++    private static final List<String> PAGE_NAMES = List.of(
++            "监控总览",
++            "点位组管理",
++            "报警中心",
++            "连接管理",
++            "数据查询",
++            "数据源浏览器",
++            "日志与系统",
++            "系统设置");
++    private static final List<String> DENSITIES = List.of("紧凑", "标准", "舒适");
++
++    private final String defaultPage;
++    private final int overviewRefreshSeconds;
++    private final boolean alertPopupEnabled;
++    private final boolean alertSoundEnabled;
++    private final int logRetentionDays;
++    private final String density;
++    private final boolean startupSelfTestEnabled;
++    private final boolean autoCleanupLogsEnabled;
++
++    public UiPreferences(
++            String defaultPage,
++            int overviewRefreshSeconds,
++            boolean alertPopupEnabled,
++            boolean alertSoundEnabled,
++            int logRetentionDays,
++            String density,
++            boolean startupSelfTestEnabled,
++            boolean autoCleanupLogsEnabled) {
++        this.defaultPage = defaultPage;
++        this.overviewRefreshSeconds = overviewRefreshSeconds;
++        this.alertPopupEnabled = alertPopupEnabled;
++        this.alertSoundEnabled = alertSoundEnabled;
++        this.logRetentionDays = logRetentionDays;
++        this.density = density;
++        this.startupSelfTestEnabled = startupSelfTestEnabled;
++        this.autoCleanupLogsEnabled = autoCleanupLogsEnabled;
++        validate(this);
++    }
++
++    public static UiPreferences defaults() {
++        return new UiPreferences("监控总览", 10, true, false, 30, "标准", false, true);
++    }
++
++    public static List<String> pageNames() {
++        return PAGE_NAMES;
++    }
++
++    public static List<String> densities() {
++        return DENSITIES;
++    }
++
++    public static void validate(UiPreferences preferences) {
++        if (preferences == null) {
++            throw new IllegalArgumentException("界面设置不能为空");
++        }
++        if (!PAGE_NAMES.contains(preferences.defaultPage)) {
++            throw new IllegalArgumentException("默认首页不在可用页面列表中");
++        }
++        if (preferences.overviewRefreshSeconds < 5 || preferences.overviewRefreshSeconds > 3600) {
++            throw new IllegalArgumentException("监控总览自动刷新间隔必须在 5 到 3600 秒之间");
++        }
++        if (preferences.logRetentionDays < 1 || preferences.logRetentionDays > 3650) {
++            throw new IllegalArgumentException("日志保留天数必须在 1 到 3650 天之间");
++        }
++        if (!DENSITIES.contains(preferences.density)) {
++            throw new IllegalArgumentException("界面显示密度不合法");
++        }
++    }
++
++    public String defaultPage() {
++        return defaultPage;
++    }
++
++    public int overviewRefreshSeconds() {
++        return overviewRefreshSeconds;
++    }
++
++    public boolean alertPopupEnabled() {
++        return alertPopupEnabled;
++    }
++
++    public boolean alertSoundEnabled() {
++        return alertSoundEnabled;
++    }
++
++    public int logRetentionDays() {
++        return logRetentionDays;
++    }
++
++    public String density() {
++        return density;
++    }
++
++    public boolean startupSelfTestEnabled() {
++        return startupSelfTestEnabled;
++    }
++
++    public boolean autoCleanupLogsEnabled() {
++        return autoCleanupLogsEnabled;
++    }
++}
+diff --git a/src/com/local/monitor/UiPreferencesStore.java b/src/com/local/monitor/UiPreferencesStore.java
+new file mode 100644
+index 0000000..52ca04d
+--- /dev/null
++++ b/src/com/local/monitor/UiPreferencesStore.java
+@@ -0,0 +1,85 @@
++package com.local.monitor;
++
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.InputStreamReader;
++import java.io.OutputStream;
++import java.io.OutputStreamWriter;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.Properties;
++
++public final class UiPreferencesStore {
++    private final Path path;
++
++    public UiPreferencesStore(Path path) {
++        this.path = path;
++    }
++
++    public UiPreferences load() {
++        if (!Files.exists(path)) {
++            return UiPreferences.defaults();
++        }
++        Properties p = new Properties();
++        try (InputStream in = Files.newInputStream(path)) {
++            p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
++            return new UiPreferences(
++                    p.getProperty("defaultPage", UiPreferences.defaults().defaultPage()),
++                    parseInt(p.getProperty("overviewRefreshSeconds"),
++                            UiPreferences.defaults().overviewRefreshSeconds()),
++                    parseBoolean(p.getProperty("alertPopupEnabled"),
++                            UiPreferences.defaults().alertPopupEnabled()),
++                    parseBoolean(p.getProperty("alertSoundEnabled"),
++                            UiPreferences.defaults().alertSoundEnabled()),
++                    parseInt(p.getProperty("logRetentionDays"),
++                            UiPreferences.defaults().logRetentionDays()),
++                    p.getProperty("density", UiPreferences.defaults().density()),
++                    parseBoolean(p.getProperty("startupSelfTestEnabled"),
++                            UiPreferences.defaults().startupSelfTestEnabled()),
++                    parseBoolean(p.getProperty("autoCleanupLogsEnabled"),
++                            UiPreferences.defaults().autoCleanupLogsEnabled()));
++        } catch (Exception ignored) {
++            return UiPreferences.defaults();
++        }
++    }
++
++    public void save(UiPreferences preferences) throws IOException {
++        UiPreferences.validate(preferences);
++        Path parent = path.getParent();
++        if (parent != null) {
++            Files.createDirectories(parent);
++        }
++        Properties p = new Properties();
++        p.setProperty("defaultPage", preferences.defaultPage());
++        p.setProperty("overviewRefreshSeconds", String.valueOf(preferences.overviewRefreshSeconds()));
++        p.setProperty("alertPopupEnabled", String.valueOf(preferences.alertPopupEnabled()));
++        p.setProperty("alertSoundEnabled", String.valueOf(preferences.alertSoundEnabled()));
++        p.setProperty("logRetentionDays", String.valueOf(preferences.logRetentionDays()));
++        p.setProperty("density", preferences.density());
++        p.setProperty("startupSelfTestEnabled", String.valueOf(preferences.startupSelfTestEnabled()));
++        p.setProperty("autoCleanupLogsEnabled", String.valueOf(preferences.autoCleanupLogsEnabled()));
++        try (OutputStream out = Files.newOutputStream(path)) {
++            p.store(new OutputStreamWriter(out, StandardCharsets.UTF_8), "UI preferences. No database secrets.");
++        }
++    }
++
++    public void restoreDefaults() throws IOException {
++        save(UiPreferences.defaults());
++    }
++
++    private static int parseInt(String value, int fallback) {
++        try {
++            return Integer.parseInt(value);
++        } catch (Exception ignored) {
++            return fallback;
++        }
++    }
++
++    private static boolean parseBoolean(String value, boolean fallback) {
++        if (value == null) {
++            return fallback;
++        }
++        return Boolean.parseBoolean(value);
++    }
++}
+diff --git a/test/com/local/monitor/GroupConfigStoreTest.java b/test/com/local/monitor/GroupConfigStoreTest.java
+index 25409fd..c3e5b8b 100644
+--- a/test/com/local/monitor/GroupConfigStoreTest.java
++++ b/test/com/local/monitor/GroupConfigStoreTest.java
+@@ -9,6 +9,7 @@ public final class GroupConfigStoreTest {
+         savesAndLoadsPointGroups();
+         missingConfigReturnsDefaultGroup();
+         rejectsRulesThatRequireMoreBackupsThanConfigured();
++        rejectsInvalidFinalUiGroupConfiguration();
+         loadsOldConfigWithBackupThresholdParticipationEnabled();
+         savesAndLoadsBackupThresholdParticipation();
+         System.out.println("GroupConfigStoreTest PASS");
+@@ -57,6 +58,73 @@ public final class GroupConfigStoreTest {
+                 "rule requiring more backups than configured should be rejected");
+     }
+
++    private static void rejectsInvalidFinalUiGroupConfiguration() throws Exception {
++        GroupMonitorPoint use = new GroupMonitorPoint("use", "USE_POINT_001", "使用位", PointRole.USE, true, 1);
++        GroupMonitorPoint backup = new GroupMonitorPoint("backup", "BACKUP_POINT_001", "备用位", PointRole.BACKUP, true, 2);
++        GroupMonitorPoint duplicateUse =
++                new GroupMonitorPoint("use2", "USE_POINT_001", "重复点位", PointRole.BACKUP, true, 2);
++        PointGroupDefinition valid = new PointGroupDefinition(
++                "group-001",
++                "区域A",
++                "后围板组",
++                "后围板总成",
++                true,
++                60,
++                List.of(use, backup),
++                new GroupAlertRule(true, true, 0, 5, true));
++
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> GroupConfigStore.validateGroups(List.of(valid, group("group-001", 1, 5, true))),
++                "duplicate group IDs should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> new PointGroupDefinition(
++                        "blank-name",
++                        "区域A",
++                        " ",
++                        "后围板总成",
++                        true,
++                        60,
++                        List.of(use, backup),
++                        new GroupAlertRule(true, true, 0, 5, true)),
++                "blank group name should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> new PointGroupDefinition(
++                        "no-use",
++                        "区域A",
++                        "后围板组",
++                        "后围板总成",
++                        true,
++                        60,
++                        List.of(new GroupMonitorPoint("backup", "BACKUP_POINT_001", "备用位", PointRole.BACKUP, true, 1)),
++                        new GroupAlertRule(true, true, 1, 5, true)),
++                "enabled group should require one enabled use point");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> new PointGroupDefinition(
++                        "duplicate-point",
++                        "区域A",
++                        "后围板组",
++                        "后围板总成",
++                        true,
++                        60,
++                        List.of(use, duplicateUse),
++                        new GroupAlertRule(true, true, 1, 5, true)),
++                "duplicate point codes within a group should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> new PointGroupDefinition(
++                        "bad-interval",
++                        "区域A",
++                        "后围板组",
++                        "后围板总成",
++                        true,
++                        0,
++                        List.of(use, backup),
++                        new GroupAlertRule(true, true, 0, 5, true)),
++                "invalid check interval should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> new GroupAlertRule(true, true, 0, 0, true),
++                "invalid alert duration should be rejected");
++    }
++
+     private static void loadsOldConfigWithBackupThresholdParticipationEnabled() throws Exception {
+         Path configPath = Files.createTempFile("old-group-config", ".properties");
+         Files.writeString(configPath, String.join(System.lineSeparator(),
+diff --git a/test/com/local/monitor/GroupMonitorLogicTest.java b/test/com/local/monitor/GroupMonitorLogicTest.java
+index c9dc4e1..28d1ab8 100644
+--- a/test/com/local/monitor/GroupMonitorLogicTest.java
++++ b/test/com/local/monitor/GroupMonitorLogicTest.java
+@@ -18,6 +18,9 @@ public final class GroupMonitorLogicTest {
+         backupThresholdCanBeIgnoredWhenRuleDisablesParticipation();
+         pointStatusesAreImmutableSnapshots();
+         runtimeStateRoundsElapsedTimeAndHandlesClockSkew();
++        queryFailureClearsShortageTimingAndDoesNotAlert();
++        recoveredShortageAfterQueryFailureStartsTimingAgain();
++        recoveredHealthyGroupAfterQueryFailureReturnsNormal();
+         System.out.println("GroupMonitorLogicTest PASS");
+     }
+
+@@ -227,6 +230,74 @@ public final class GroupMonitorLogicTest {
+                 "minutes should round up");
+     }
+
++    private static void queryFailureClearsShortageTimingAndDoesNotAlert() {
++        PointGroupDefinition group = defaultGroup(3, 5);
++        GroupRuntimeState state = new GroupRuntimeState();
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME.plusMinutes(4));
++
++        GroupEvaluation failed = GroupMonitorLogic.queryFailed(
++                group,
++                state,
++                BASE_TIME.plusMinutes(5),
++                "查询失败：连接超时");
++
++        TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, failed.status(),
++                "query failure should have an independent status");
++        TestSupport.assertFalse(failed.ruleMatched(), "query failure must not match shortage rule");
++        TestSupport.assertFalse(failed.shouldShowDialog(), "query failure must not show shortage dialog");
++        TestSupport.assertEquals(0, failed.continuousMatchedSeconds(),
++                "query failure should not keep previous shortage seconds");
++        TestSupport.assertEquals(null, state.conditionFirstMatchedAt(),
++                "query failure should clear previous shortage start time");
++        TestSupport.assertEquals(BASE_TIME.plusMinutes(5), state.lastCheckedAt(),
++                "query failure should still update last checked time");
++        TestSupport.assertContains(failed.message(), "查询失败", "failure message should be operator visible");
++        TestSupport.assertNotContains(failed.message(), "EMPTY", "failure message must not look like material state");
++        TestSupport.assertNotContains(failed.message(), "ACTIVE_ALERT", "failure message must not leak alert enum");
++    }
++
++    private static void recoveredShortageAfterQueryFailureStartsTimingAgain() {
++        PointGroupDefinition group = defaultGroup(3, 5);
++        GroupRuntimeState state = new GroupRuntimeState();
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME.plusMinutes(4));
++        GroupMonitorLogic.queryFailed(group, state, BASE_TIME.plusMinutes(5), "查询失败：连接超时");
++
++        GroupEvaluation recoveredButStillShortage = GroupMonitorLogic.evaluate(
++                group,
++                shortageRecords(),
++                state,
++                BASE_TIME.plusMinutes(6));
++
++        TestSupport.assertEquals(GroupAlertStatus.PENDING_ALERT, recoveredButStillShortage.status(),
++                "shortage after query recovery should start pending again");
++        TestSupport.assertEquals(0, recoveredButStillShortage.continuousMatchedSeconds(),
++                "shortage timing must restart after query recovery");
++        TestSupport.assertFalse(recoveredButStillShortage.shouldShowDialog(),
++                "recovered first shortage check must not alert immediately");
++    }
++
++    private static void recoveredHealthyGroupAfterQueryFailureReturnsNormal() {
++        PointGroupDefinition group = defaultGroup(3, 5);
++        GroupRuntimeState state = new GroupRuntimeState();
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
++        GroupMonitorLogic.queryFailed(group, state, BASE_TIME.plusMinutes(1), "查询失败：连接超时");
++
++        GroupEvaluation healthy = GroupMonitorLogic.evaluate(group, List.of(
++                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
++                record("BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0),
++                record("BACKUP_POINT_002", "SHELF_BACKUP_002", 1, 0),
++                record("BACKUP_POINT_003", "SHELF_BACKUP_003", 1, 0),
++                record("BACKUP_POINT_004", "", 1, 0)), state, BASE_TIME.plusMinutes(2));
++
++        TestSupport.assertEquals(GroupAlertStatus.NORMAL, healthy.status(),
++                "healthy query recovery should return normal");
++        TestSupport.assertEquals(0, healthy.continuousMatchedSeconds(),
++                "healthy recovery should not have shortage timing");
++        TestSupport.assertFalse(healthy.shouldShowDialog(), "healthy recovery should not show dialog");
++    }
++
+     private static PointGroupDefinition defaultGroup(int minBackupAvailable, int durationMinutes) {
+         return defaultGroup(minBackupAvailable, durationMinutes,
+                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes));
+diff --git a/test/com/local/monitor/PointDataQueryRepositoryTest.java b/test/com/local/monitor/PointDataQueryRepositoryTest.java
+new file mode 100644
+index 0000000..c96ad3f
+--- /dev/null
++++ b/test/com/local/monitor/PointDataQueryRepositoryTest.java
+@@ -0,0 +1,94 @@
++package com.local.monitor;
++
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.List;
++
++public final class PointDataQueryRepositoryTest {
++    public static void main(String[] args) throws Exception {
++        localStructuredQueryUsesFixedReadOnlySourceAndFilters();
++        rejectsFreeSqlAndInvalidIdentifiers();
++        System.out.println("PointDataQueryRepositoryTest PASS");
++    }
++
++    private static void localStructuredQueryUsesFixedReadOnlySourceAndFilters() throws Exception {
++        Path dbPath = Files.createTempDirectory("point-query-test").resolve("local-test-db");
++        DbConfig config = DbConfig.localTest(dbPath.toString(), 10);
++        LocalTestDatabase.reset(config);
++        PointDataQueryRepository repository = new PointDataQueryRepository();
++        PointDataQuery query = new PointDataQuery(
++                "USE_POINT",
++                "",
++                "AREA_USE",
++                "",
++                "",
++                "",
++                20,
++                0);
++
++        PointDataQueryResult result = repository.query(config, new char[0], query);
++
++        TestSupport.assertEquals(1, result.records().size(), "area and point keyword filters should narrow rows");
++        TestSupport.assertEquals("USE_POINT_001", result.records().get(0).mapDataCode(), "query should return point");
++        TestSupport.assertEquals("select", result.sqlKind(), "query should expose SELECT-only kind");
++        TestSupport.assertFalse(result.sqlTemplate().contains("USE_POINT"),
++                "SQL template must not contain filter values");
++        TestSupport.assertFalse(result.sqlTemplate().contains("AREA_USE"),
++                "SQL template must not contain area values");
++        TestSupport.assertTrue(result.sqlTemplate().contains(" from public.tcs_map_data "),
++                "query should use the fixed point status source table");
++        TestSupport.assertTrue(result.sqlTemplate().contains(" limit ? offset ?"),
++                "query should use parameterized pagination");
++    }
++
++    private static void rejectsFreeSqlAndInvalidIdentifiers() {
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> PointDataQuery.fixedSelectSql("public;drop"),
++                "invalid schema should be rejected");
++        String sql = PointDataQuery.fixedSelectSql("public");
++        TestSupport.assertFalse(containsSqlWord(sql, "insert"), "query SQL must not contain insert");
++        TestSupport.assertFalse(containsSqlWord(sql, "update"), "query SQL must not contain update");
++        TestSupport.assertFalse(containsSqlWord(sql, "delete"), "query SQL must not contain delete");
++        TestSupport.assertFalse(sql.toLowerCase().contains(" drop "), "query SQL must not contain ddl");
++    }
++
++    private static boolean containsSqlWord(String sql, String word) {
++        return sql.toLowerCase().matches(".*\\b" + word + "\\b.*");
++    }
++
++    private static final class TestSupport {
++        static void assertTrue(boolean condition, String message) {
++            if (!condition) {
++                throw new AssertionError(message);
++            }
++        }
++
++        static void assertFalse(boolean condition, String message) {
++            if (condition) {
++                throw new AssertionError(message);
++            }
++        }
++
++        static void assertEquals(Object expected, Object actual, String message) {
++            if (!java.util.Objects.equals(expected, actual)) {
++                throw new AssertionError(message + " expected=" + expected + " actual=" + actual);
++            }
++        }
++
++        static void assertThrows(Class<? extends Throwable> type, ThrowingRunnable action, String message) {
++            try {
++                action.run();
++            } catch (Throwable t) {
++                if (type.isInstance(t)) {
++                    return;
++                }
++                throw new AssertionError(message + " wrong exception=" + t);
++            }
++            throw new AssertionError(message + " no exception thrown");
++        }
++    }
++
++    private interface ThrowingRunnable {
++        void run() throws Exception;
++    }
++}
+diff --git a/test/com/local/monitor/ShelfPointMonitorAppUiTest.java b/test/com/local/monitor/ShelfPointMonitorAppUiTest.java
+index 856402e..11ffa4e 100644
+--- a/test/com/local/monitor/ShelfPointMonitorAppUiTest.java
++++ b/test/com/local/monitor/ShelfPointMonitorAppUiTest.java
+@@ -25,6 +25,7 @@ import javax.swing.AbstractButton;
+ import javax.swing.JButton;
+ import javax.swing.JCheckBox;
+ import javax.swing.JComponent;
++import javax.swing.JDialog;
+ import javax.swing.JLabel;
+ import javax.swing.JList;
+ import javax.swing.JPanel;
+@@ -36,7 +37,9 @@ import javax.swing.border.TitledBorder;
+
+ public final class ShelfPointMonitorAppUiTest {
+     public static void main(String[] args) throws Exception {
+-        appHasThreeNavigationPages();
++        appHasFinalNavigationPages();
++        finalNavigationPagesCanSwitchAndAreNotBlank();
++        finalShellHasRequiredStatusBarsAndSize();
+         connectionPageUsesChineseOperatorLabels();
+         alertPageContainsGroupPointTable();
+         groupCheckIntervalFieldExists();
+@@ -49,6 +52,10 @@ public final class ShelfPointMonitorAppUiTest {
+         capturedMonitoredGroupsIgnoreLaterFormChanges();
+         manualCheckUsesGroupSnapshotCapturedOnEdt();
+         groupFetchFailureMarksCheckedAndContinues();
++        groupFetchFailureUpdatesSelectedDashboardWithChineseStatus();
++        queryFailureClosesActiveDialogForSameGroupOnly();
++        queryFailureDoesNotCloseDialogForOtherGroup();
++        queryFailureEventsAreDeduplicatedAndSanitized();
+         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
+         gridBagPanelsDoNotOverlapCells();
+         groupStatusTextUsesOperatorChinese();
+@@ -60,16 +67,71 @@ public final class ShelfPointMonitorAppUiTest {
+         System.out.println("ShelfPointMonitorAppUiTest PASS");
+     }
+
+-    private static void appHasThreeNavigationPages() throws Exception {
++    private static void appHasFinalNavigationPages() throws Exception {
+         runOnEdtAndWait(() -> {
+             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+             try {
+                 JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                 TestSupport.assertTrue(navigation != null, "app should have a navigation list");
+-                TestSupport.assertEquals(3, navigation.getModel().getSize(), "app should have three navigation pages");
+-                TestSupport.assertEquals("连接管理", navigation.getModel().getElementAt(0), "first page should be connection management");
+-                TestSupport.assertEquals("数据库浏览器", navigation.getModel().getElementAt(1), "second page should be database browser");
+-                TestSupport.assertEquals("点位缺料报警", navigation.getModel().getElementAt(2), "third page should be point alert");
++                List<String> expected = List.of(
++                        "监控总览",
++                        "点位组管理",
++                        "报警中心",
++                        "连接管理",
++                        "数据查询",
++                        "数据源浏览器",
++                        "日志与系统",
++                        "系统设置");
++                TestSupport.assertEquals(expected.size(), navigation.getModel().getSize(),
++                        "app should have eight final navigation pages");
++                for (int i = 0; i < expected.size(); i++) {
++                    TestSupport.assertEquals(expected.get(i), navigation.getModel().getElementAt(i),
++                            "navigation item order should match final UI spec at index " + i);
++                }
++            } finally {
++                app.dispose();
++            }
++        });
++    }
++
++    private static void finalNavigationPagesCanSwitchAndAreNotBlank() throws Exception {
++        runOnEdtAndWait(() -> {
++            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
++            try {
++                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
++                String[] requiredTexts = {
++                        "监控点位组",
++                        "验证配置",
++                        "活跃报警",
++                        "数据库访问模式：只读",
++                        "点位编码关键字：",
++                        "预览前100行",
++                        "执行自检",
++                        "保存设置"
++                };
++                for (int i = 0; i < navigation.getModel().getSize(); i++) {
++                    navigation.setSelectedIndex(i);
++                    Set<String> texts = collectVisibleTexts(app.getContentPane());
++                    TestSupport.assertTrue(texts.contains(requiredTexts[i]),
++                            "page should expose real visible content for " + navigation.getModel().getElementAt(i));
++                }
++            } finally {
++                app.dispose();
++            }
++        });
++    }
++
++    private static void finalShellHasRequiredStatusBarsAndSize() throws Exception {
++        runOnEdtAndWait(() -> {
++            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
++            try {
++                TestSupport.assertTrue(app.getMinimumSize().width >= 1180, "minimum width should be at least 1180");
++                TestSupport.assertTrue(app.getMinimumSize().height >= 760, "minimum height should be at least 760");
++                Set<String> texts = collectVisibleTexts(app.getContentPane());
++                TestSupport.assertTrue(texts.contains("监控状态：未运行"), "top status bar should show monitor status");
++                TestSupport.assertTrue(texts.contains("上次检测：--"), "top status bar should show last check");
++                TestSupport.assertTrue(texts.contains("下次检测：--"), "top status bar should show next check");
++                TestSupport.assertTrue(texts.contains("就绪"), "bottom status bar should show runtime status");
+             } finally {
+                 app.dispose();
+             }
+@@ -103,7 +165,7 @@ public final class ShelfPointMonitorAppUiTest {
+                 TestSupport.assertTrue(texts.contains("密码："), "connection page should show Chinese password label");
+                 TestSupport.assertTrue(texts.contains("SSL模式："), "connection page should show Chinese SSL label");
+                 TestSupport.assertTrue(texts.contains("新建连接"), "connection page should show Chinese new button");
+-                TestSupport.assertTrue(texts.contains("测试连接并使用"), "connection page should show Chinese test button");
++                TestSupport.assertTrue(texts.contains("测试连接"), "connection page should show Chinese test button");
+             } finally {
+                 app.dispose();
+             }
+@@ -381,17 +443,21 @@ public final class ShelfPointMonitorAppUiTest {
+                     "successful group should also be marked checked");
+             TestSupport.assertEquals(1, result.checkedGroups(), "successful group should still be processed");
+             TestSupport.assertEquals(1, result.failedGroups(), "failed group should be counted");
+-            TestSupport.assertEquals(1, result.evaluations().size(),
+-                    "failed fetch should not create a group evaluation");
+-            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(0).groupId(),
+-                    "only the successful group should be evaluated");
++            TestSupport.assertEquals(2, result.evaluations().size(),
++                    "failed fetch should create a visible query failure evaluation");
++            TestSupport.assertEquals(failingGroup.id(), result.evaluations().get(0).groupId(),
++                    "failed group should be evaluated first");
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
++                    "failed group should use independent query failure status");
++            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(1).groupId(),
++                    "successful group should still be evaluated");
+             TestSupport.assertFalse(result.dialogRequested(), "failed fetch should not request a dialog");
+
+             @SuppressWarnings("unchecked")
+             Map<String, GroupAlertStatus> statuses =
+                     (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+-            TestSupport.assertFalse(statuses.containsKey(failingGroup.id()),
+-                    "failed group should not update last alert status without an evaluation");
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, statuses.get(failingGroup.id()),
++                    "failed group should update last status to query failed");
+             TestSupport.assertEquals(GroupAlertStatus.NORMAL, statuses.get(healthyGroup.id()),
+                     "successful healthy group should update its last status");
+         } finally {
+@@ -400,6 +466,173 @@ public final class ShelfPointMonitorAppUiTest {
+         }
+     }
+
++    private static void groupFetchFailureUpdatesSelectedDashboardWithChineseStatus() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        PointGroupDefinition group = group("group-query-failed", 60);
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            setField(appRef[0], "pointGroups", new ArrayList<>(List.of(group)));
++            invoke(appRef[0], "refreshGroupList", new Class<?>[] {String.class}, group.id());
++            invoke(appRef[0], "populateSelectedGroup", new Class<?>[0]);
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
++                    List.of(group),
++                    LocalDateTime.of(2026, 7, 3, 10, 20),
++                    "test",
++                    ignored -> {
++                        throw new IllegalStateException("connection timeout");
++                    });
++            runOnEdtAndWait(() -> {
++                JLabel summary = fieldValue(app, "groupSummaryLabel", JLabel.class);
++                String text = summary.getText();
++                TestSupport.assertContains(text, "查询失败", "dashboard should show query failure in Chinese");
++                TestSupport.assertContains(text, "connection timeout", "dashboard should show sanitized error summary");
++                assertNoTechnicalGroupText(text, "query failure dashboard");
++            });
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
++                    "result should expose query failure status");
++            TestSupport.assertFalse(result.dialogRequested(), "query failure should not show shortage dialog");
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
++    private static void queryFailureClosesActiveDialogForSameGroupOnly() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        Path logDir = Files.createTempDirectory("query-failure-dialog-test");
++        PointGroupDefinition group = group("group-dialog-a", 60);
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            setField(appRef[0], "groupLogWriter", new GroupLogWriter(logDir));
++            setField(appRef[0], "logPath", logDir.resolve("monitor.log"));
++            setField(appRef[0], "activeDialog", new JDialog(appRef[0], "active A"));
++            setField(appRef[0], "activeDialogGroupId", group.id());
++            @SuppressWarnings("unchecked")
++            Map<String, GroupAlertStatus> statuses =
++                    (Map<String, GroupAlertStatus>) fieldValue(appRef[0], "lastGroupStatuses", Map.class);
++            statuses.put(group.id(), GroupAlertStatus.ACTIVE_ALERT);
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
++                    List.of(group),
++                    LocalDateTime.of(2026, 7, 3, 10, 30),
++                    "test",
++                    ignored -> {
++                        throw new IllegalStateException("connection timeout");
++                    });
++            runOnEdtAndWait(() -> {
++                TestSupport.assertEquals(null, fieldValue(app, "activeDialog", JDialog.class),
++                        "query failure should clear active dialog for the same group");
++                TestSupport.assertEquals("", fieldValue(app, "activeDialogGroupId", String.class),
++                        "query failure should clear active dialog group id");
++            });
++
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
++                    "same group failure should be a query failure evaluation");
++            List<String> eventRows = Files.readAllLines(logDir.resolve("event-log.csv"));
++            String eventLog = String.join("\n", eventRows);
++            TestSupport.assertContains(eventLog, "QUERY_FAILED", "query failure event should be written");
++            TestSupport.assertNotContains(eventLog, "ACKNOWLEDGED",
++                    "closing stale dialog must not acknowledge the alert");
++            TestSupport.assertNotContains(eventLog, "RECOVERED",
++                    "query failure must not be logged as recovered");
++            TestSupport.assertNotContains(eventLog, "ALERT_OPEN",
++                    "query failure must not open a new shortage alert");
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
++    private static void queryFailureDoesNotCloseDialogForOtherGroup() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        PointGroupDefinition failingGroup = group("group-dialog-a", 60);
++        PointGroupDefinition dialogGroup = group("group-dialog-b", 60);
++        JDialog[] dialogRef = new JDialog[1];
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            dialogRef[0] = new JDialog(appRef[0], "active B");
++            setField(appRef[0], "activeDialog", dialogRef[0]);
++            setField(appRef[0], "activeDialogGroupId", dialogGroup.id());
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            app.checkGroupsWithFetcher(
++                    List.of(failingGroup),
++                    LocalDateTime.of(2026, 7, 3, 10, 31),
++                    "test",
++                    ignored -> {
++                        throw new IllegalStateException("connection timeout");
++                    });
++            runOnEdtAndWait(() -> {
++                TestSupport.assertEquals(dialogRef[0], fieldValue(app, "activeDialog", JDialog.class),
++                        "query failure must not close another group's dialog");
++                TestSupport.assertEquals(dialogGroup.id(), fieldValue(app, "activeDialogGroupId", String.class),
++                        "other group's active dialog ownership should stay unchanged");
++            });
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
++    private static void queryFailureEventsAreDeduplicatedAndSanitized() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        Path logDir = Files.createTempDirectory("query-failure-log-test");
++        PointGroupDefinition group = group("group-query-log", 60);
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            setField(appRef[0], "groupLogWriter", new GroupLogWriter(logDir));
++            setField(appRef[0], "logPath", logDir.resolve("monitor.log"));
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            List<String> unsafeMessages = List.of(
++                    "FATAL: password authentication failed for user \"readonly_user\"",
++                    "Access denied for user 'readonly_user'@'192.0.2.88'",
++                    "role \"readonly_user\" does not exist",
++                    "uid=readonly_user password=Secret-123",
++                    "jdbc:postgresql://192.0.2.88:2345/cms_web?user=readonly_user&password=Secret-123",
++                    "at com.local.monitor.PointRepository.fetch(PointRepository.java:24)");
++            for (int i = 0; i < unsafeMessages.size(); i++) {
++                String unsafeMessage = unsafeMessages.get(i);
++                app.checkGroupsWithFetcher(
++                        List.of(group),
++                        LocalDateTime.of(2026, 7, 3, 10, 20).plusMinutes(i),
++                        "test",
++                        ignored -> {
++                            throw new IllegalStateException(unsafeMessage);
++                        });
++            }
++            app.checkGroupsWithFetcher(
++                    List.of(group),
++                    LocalDateTime.of(2026, 7, 3, 10, 40),
++                    "test",
++                    ignored -> healthyRecords());
++
++            List<String> checkRows = Files.readAllLines(logDir.resolve("check-log.csv"));
++            List<String> eventRows = Files.readAllLines(logDir.resolve("event-log.csv"));
++            List<String> monitorRows = Files.readAllLines(logDir.resolve("monitor.log"));
++            TestSupport.assertEquals(unsafeMessages.size() + 2, checkRows.size(),
++                    "each actual check should write one check row plus header");
++            TestSupport.assertEquals(3, eventRows.size(),
++                    "continuous failures should only write first failure and recovery events");
++            TestSupport.assertContains(eventRows.get(1), "QUERY_FAILED", "first event should mark query failure");
++            TestSupport.assertContains(eventRows.get(2), "QUERY_RECOVERED", "second event should mark query recovery");
++
++            assertSanitizedQueryFailureLog(String.join("\n", checkRows), "check-log.csv");
++            assertSanitizedQueryFailureLog(String.join("\n", eventRows), "event-log.csv");
++            assertSanitizedQueryFailureLog(String.join("\n", monitorRows), "monitor.log");
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
+     private static void checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush() throws Exception {
+         ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+         PointGroupDefinition group = group("group-dashboard", 60);
+@@ -491,6 +724,8 @@ public final class ShelfPointMonitorAppUiTest {
+                 "active status should be operator Chinese");
+         TestSupport.assertEquals("已关注", GroupStatusText.statusText(GroupAlertStatus.ACKED_ALERT),
+                 "acknowledged status should be operator Chinese");
++        TestSupport.assertEquals("查询失败", GroupStatusText.statusText(GroupAlertStatus.QUERY_FAILED),
++                "query failure status should be operator Chinese");
+
+         for (GroupAlertStatus status : GroupAlertStatus.values()) {
+             String text = GroupStatusText.statusText(status);
+@@ -1027,11 +1262,22 @@ public final class ShelfPointMonitorAppUiTest {
+         TestSupport.assertNotContains(text, "PENDING_ALERT", context + " should not leak pending enum");
+         TestSupport.assertNotContains(text, "ACTIVE_ALERT", context + " should not leak active enum");
+         TestSupport.assertNotContains(text, "ACKED_ALERT", context + " should not leak acknowledged enum");
++        TestSupport.assertNotContains(text, "QUERY_FAILED", context + " should not leak query failure enum");
+         TestSupport.assertNotContains(text, "useEmpty=", context + " should not leak debug use point field");
+         TestSupport.assertNotContains(text, "backup=", context + " should not leak debug backup field");
+         TestSupport.assertNotContains(text, "continuous=", context + " should not leak debug duration field");
+     }
+
++    private static void assertSanitizedQueryFailureLog(String text, String context) {
++        TestSupport.assertContains(text, "查询失败", context + " should retain useful failure category");
++        TestSupport.assertNotContains(text, "readonly_user", context + " must not contain database username");
++        TestSupport.assertNotContains(text, "Secret-123", context + " must not contain password");
++        TestSupport.assertNotContains(text, "jdbc:postgresql://192.0.2.88:2345/cms_web",
++                context + " must not contain full JDBC URL");
++        TestSupport.assertNotContains(text, "PointRepository.java:24",
++                context + " must not contain stack trace location");
++    }
++
+     private static void collectVisibleTexts(Component component, Set<String> texts) {
+         if (component instanceof JLabel) {
+             texts.add(((JLabel) component).getText());
+diff --git a/test/com/local/monitor/UiPreferencesStoreTest.java b/test/com/local/monitor/UiPreferencesStoreTest.java
+new file mode 100644
+index 0000000..4301c6a
+--- /dev/null
++++ b/test/com/local/monitor/UiPreferencesStoreTest.java
+@@ -0,0 +1,99 @@
++package com.local.monitor;
++
++import java.nio.file.Files;
++import java.nio.file.Path;
++
++public final class UiPreferencesStoreTest {
++    public static void main(String[] args) throws Exception {
++        savesLoadsAndRestoresDefaults();
++        rejectsInvalidValues();
++        System.out.println("UiPreferencesStoreTest PASS");
++    }
++
++    private static void savesLoadsAndRestoresDefaults() throws Exception {
++        Path path = Files.createTempDirectory("ui-settings-test").resolve("ui-settings.properties");
++        UiPreferencesStore store = new UiPreferencesStore(path);
++
++        UiPreferences defaults = store.load();
++        TestSupport.assertEquals("监控总览", defaults.defaultPage(), "default home page should be overview");
++        TestSupport.assertTrue(defaults.alertPopupEnabled(), "alert popup should default enabled");
++
++        UiPreferences custom = new UiPreferences(
++                "报警中心",
++                15,
++                false,
++                true,
++                14,
++                "紧凑",
++                false,
++                true);
++        store.save(custom);
++
++        UiPreferences loaded = store.load();
++        TestSupport.assertEquals("报警中心", loaded.defaultPage(), "default page should round-trip");
++        TestSupport.assertEquals(15, loaded.overviewRefreshSeconds(), "overview refresh should round-trip");
++        TestSupport.assertFalse(loaded.alertPopupEnabled(), "alert popup setting should round-trip");
++        TestSupport.assertTrue(loaded.alertSoundEnabled(), "sound setting should round-trip");
++        TestSupport.assertEquals(14, loaded.logRetentionDays(), "retention should round-trip");
++        TestSupport.assertEquals("紧凑", loaded.density(), "density should round-trip");
++        TestSupport.assertFalse(loaded.startupSelfTestEnabled(), "startup self-test should round-trip");
++        TestSupport.assertTrue(loaded.autoCleanupLogsEnabled(), "cleanup setting should round-trip");
++
++        store.restoreDefaults();
++        TestSupport.assertEquals("监控总览", store.load().defaultPage(), "restore should reset default page");
++    }
++
++    private static void rejectsInvalidValues() throws Exception {
++        Path path = Files.createTempDirectory("ui-settings-invalid-test").resolve("ui-settings.properties");
++        UiPreferencesStore store = new UiPreferencesStore(path);
++
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> store.save(new UiPreferences("不存在页面", 10, true, false, 30, "标准", true, false)),
++                "unknown default page should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> store.save(new UiPreferences("监控总览", 0, true, false, 30, "标准", true, false)),
++                "invalid refresh interval should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> store.save(new UiPreferences("监控总览", 10, true, false, 0, "标准", true, false)),
++                "invalid retention should be rejected");
++        TestSupport.assertThrows(IllegalArgumentException.class,
++                () -> store.save(new UiPreferences("监控总览", 10, true, false, 30, "不存在密度", true, false)),
++                "invalid density should be rejected");
++    }
++
++    private static final class TestSupport {
++        static void assertTrue(boolean condition, String message) {
++            if (!condition) {
++                throw new AssertionError(message);
++            }
++        }
++
++        static void assertFalse(boolean condition, String message) {
++            if (condition) {
++                throw new AssertionError(message);
++            }
++        }
++
++        static void assertEquals(Object expected, Object actual, String message) {
++            if (!java.util.Objects.equals(expected, actual)) {
++                throw new AssertionError(message + " expected=" + expected + " actual=" + actual);
++            }
++        }
++
++        static void assertThrows(Class<? extends Throwable> type, ThrowingRunnable action, String message) {
++            try {
++                action.run();
++            } catch (Throwable t) {
++                if (type.isInstance(t)) {
++                    return;
++                }
++                throw new AssertionError(message + " wrong exception=" + t);
++            }
++            throw new AssertionError(message + " no exception thrown");
++        }
++    }
++
++    private interface ThrowingRunnable {
++        void run() throws Exception;
++    }
++}
