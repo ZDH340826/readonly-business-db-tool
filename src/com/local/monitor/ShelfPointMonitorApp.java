@@ -545,65 +545,19 @@ extends JFrame {
     }
 
     private JPanel buildOverviewPage() {
-        JPanel panel = new JPanel(new BorderLayout(12, 12));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(new Color(245, 247, 250));
-        JPanel panel2 = new JPanel(new GridLayout(1, 4, 12, 0));
-        panel2.setOpaque(false);
-        panel2.add(this.statCard("\u76d1\u63a7\u70b9\u4f4d\u7ec4", this.overviewGroupCountLabel, new Color(38, 105, 210)));
-        panel2.add(this.statCard("\u7f3a\u6599\u62a5\u8b66", this.overviewAlertCountLabel, new Color(190, 48, 48)));
-        panel2.add(this.statCard("\u89c2\u5bdf\u4e2d", this.overviewPendingCountLabel, new Color(190, 120, 30)));
-        panel2.add(this.statCard("\u6570\u636e\u5f02\u5e38", this.overviewDataErrorCountLabel, new Color(160, 70, 120)));
-        panel.add((Component)panel2, "North");
-        this.overviewTable.setSelectionMode(0);
-        this.overviewTable.setRowHeight(28);
-        this.overviewTable.getSelectionModel().addListSelectionListener(listSelectionEvent -> {
-            if (!listSelectionEvent.getValueIsAdjusting()) {
-                this.updateOverviewDetail();
-            }
-        });
-        this.overviewDetailArea.setEditable(false);
-        this.overviewDetailArea.setLineWrap(true);
-        this.overviewDetailArea.setWrapStyleWord(true);
-        this.overviewDetailArea.setText("\u8bf7\u9009\u62e9\u5de6\u4fa7\u70b9\u4f4d\u7ec4\u67e5\u770b\u8be6\u60c5\u3002");
-        JPanel panel3 = new JPanel(new FlowLayout(0, 8, 0));
-        JButton button = new JButton("\u5f00\u59cb\u76d1\u63a7");
-        JButton button2 = new JButton("\u505c\u6b62\u76d1\u63a7");
-        JButton button3 = new JButton("\u7acb\u5373\u68c0\u6d4b");
-        JButton button4 = new JButton("\u67e5\u770b\u62a5\u8b66\u8be6\u60c5");
-        JButton button5 = new JButton("\u5df2\u5173\u6ce8");
-        button.addActionListener(actionEvent -> this.startMonitoring());
-        button2.addActionListener(actionEvent -> this.stopMonitoring());
-        button3.addActionListener(actionEvent -> this.checkNow());
-        button4.addActionListener(actionEvent -> this.navigationList.setSelectedValue(PAGE_ALERT_CENTER, true));
-        button5.addActionListener(actionEvent -> this.acknowledgeSelectedOverviewAlert());
-        panel3.add(button);
-        panel3.add(button2);
-        panel3.add(button3);
-        panel3.add(button4);
-        panel3.add(button5);
-        JPanel panel4 = new JPanel(new BorderLayout(8, 8));
-        panel4.setBorder(BorderFactory.createTitledBorder("\u70b9\u4f4d\u7ec4\u8be6\u60c5"));
-        panel4.add((Component)new JScrollPane(this.overviewDetailArea), "Center");
-        panel4.add((Component)panel3, "South");
-        JSplitPane jSplitPane = new JSplitPane(1, new JScrollPane(this.overviewTable), panel4);
-        jSplitPane.setDividerLocation(690);
-        jSplitPane.setResizeWeight(0.68);
-        panel.add((Component)jSplitPane, "Center");
-        return panel;
-    }
-
-    private JPanel statCard(String text, JLabel label, Color color) {
-        JPanel panel = new JPanel(new BorderLayout(6, 6));
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(220, 225, 232)), BorderFactory.createEmptyBorder(12, 14, 12, 14)));
-        JLabel label2 = new JLabel(text);
-        label2.setForeground(new Color(80, 88, 100));
-        label.setFont(label.getFont().deriveFont(1, 28.0f));
-        label.setForeground(color);
-        panel.add((Component)label2, "North");
-        panel.add((Component)label, "Center");
-        return panel;
+        return new OverviewPage(
+                this.overviewGroupCountLabel,
+                this.overviewAlertCountLabel,
+                this.overviewPendingCountLabel,
+                this.overviewDataErrorCountLabel,
+                this.overviewTable,
+                this.overviewDetailArea,
+                this::updateOverviewDetail,
+                this::startMonitoring,
+                this::stopMonitoring,
+                this::checkNow,
+                () -> this.navigationList.setSelectedValue(PAGE_ALERT_CENTER, true),
+                this::acknowledgeSelectedOverviewAlert);
     }
 
     private JPanel buildConnectionPage() {
@@ -885,62 +839,17 @@ extends JFrame {
     }
 
     private JPanel buildAlertCenterPage() {
-        AbstractButton abstractButton;
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createTitledBorder(PAGE_ALERT_CENTER));
-        JPanel panel2 = new JPanel(new FlowLayout(0, 8, 0));
-        panel2.add(new JLabel("\u6d3b\u8dc3\u62a5\u8b66"));
-        panel2.add(new JLabel("\u5df2\u5173\u6ce8"));
-        panel2.add(new JLabel("\u89c2\u5bdf\u4e2d"));
-        panel2.add(new JLabel("\u67e5\u8be2\u5931\u8d25"));
-        panel2.add(new JLabel("\u5df2\u6062\u590d"));
-        panel2.add(new JLabel("\u7b5b\u9009\uff1a"));
-        panel2.add(this.alertCenterFilterBox);
-        ButtonGroup buttonGroup = new ButtonGroup();
-        for (String value2 : new String[]{"\u6d3b\u8dc3\u62a5\u8b66", "\u5df2\u5173\u6ce8", "\u89c2\u5bdf\u4e2d", "\u67e5\u8be2\u5931\u8d25", "\u5df2\u6062\u590d"}) {
-            abstractButton = new JToggleButton(value2);
-            buttonGroup.add(abstractButton);
-            panel2.add(abstractButton);
-            abstractButton.addActionListener(actionEvent -> {
-                this.alertCenterFilterBox.setSelectedItem(value2);
-                this.refreshAlertCenterPage();
-            });
-            if (!value2.equals(String.valueOf(this.alertCenterFilterBox.getSelectedItem()))) continue;
-            abstractButton.setSelected(true);
-        }
-        JButton button = new JButton("\u5237\u65b0\u62a5\u8b66");
-        JButton button2 = new JButton("\u6807\u8bb0\u5df2\u5173\u6ce8");
-        JButton button3 = new JButton("\u67e5\u770b\u70b9\u4f4d\u8be6\u60c5");
-        JButton button4 = new JButton("\u7acb\u5373\u68c0\u6d4b\u8be5\u7ec4");
-        abstractButton = new JButton("\u67e5\u770b\u8fde\u63a5\u72b6\u6001");
-        panel2.add(button);
-        panel2.add(button2);
-        panel2.add(button3);
-        panel2.add(button4);
-        panel2.add(abstractButton);
-        panel.add((Component)panel2, "North");
-        this.alertCenterTable.setSelectionMode(0);
-        this.alertCenterTable.setRowHeight(26);
-        this.alertCenterTable.getSelectionModel().addListSelectionListener(listSelectionEvent -> {
-            if (!listSelectionEvent.getValueIsAdjusting()) {
-                this.updateAlertCenterDetail();
-            }
-        });
-        this.alertCenterDetailArea.setEditable(false);
-        this.alertCenterDetailArea.setLineWrap(true);
-        this.alertCenterDetailArea.setWrapStyleWord(true);
-        this.alertCenterDetailArea.setText("\u5f53\u524d\u65e0\u62a5\u8b66\u4e8b\u4ef6\u3002\u67e5\u8be2\u5931\u8d25\u5c5e\u4e8e\u7cfb\u7edf\u6570\u636e\u5f02\u5e38\uff0c\u4e0d\u5c5e\u4e8e\u7f3a\u6599\u62a5\u8b66\u3002");
-        JSplitPane jSplitPane = new JSplitPane(1, new JScrollPane(this.alertCenterTable), new JScrollPane(this.alertCenterDetailArea));
-        jSplitPane.setDividerLocation(720);
-        jSplitPane.setResizeWeight(0.7);
-        panel.add((Component)jSplitPane, "Center");
-        this.alertCenterFilterBox.addActionListener(actionEvent -> this.refreshAlertCenterPage());
-        button.addActionListener(actionEvent -> this.refreshAlertCenterPage());
-        button2.addActionListener(actionEvent -> this.acknowledgeSelectedAlertCenterGroup());
-        button3.addActionListener(actionEvent -> this.showSelectedAlertCenterGroupInOverview());
-        button4.addActionListener(actionEvent -> this.checkSelectedAlertCenterGroup());
-        abstractButton.addActionListener(actionEvent -> this.navigationList.setSelectedValue(PAGE_CONNECTIONS, true));
-        return panel;
+        return new AlertCenterPage(
+                this.alertCenterFilterBox,
+                this.alertCenterTable,
+                this.alertCenterDetailArea,
+                this::updateAlertCenterDetail,
+                this::refreshAlertCenterPage,
+                this::refreshAlertCenterPage,
+                this::acknowledgeSelectedAlertCenterGroup,
+                this::showSelectedAlertCenterGroupInOverview,
+                this::checkSelectedAlertCenterGroup,
+                () -> this.navigationList.setSelectedValue(PAGE_CONNECTIONS, true));
     }
 
     private JPanel buildLogsSystemPage() {
@@ -2522,7 +2431,7 @@ extends JFrame {
             return "\u672a\u68c0\u6d4b";
         }
         if (groupAlertStatus == GroupAlertStatus.QUERY_FAILED) {
-            return "\u67e5\u8be2\u5931\u8d25\uff0c\u6570\u636e\u4e0d\u53ef\u7528";
+            return OverviewPage.QUERY_FAILURE_TEXT;
         }
         return GroupStatusText.statusText(groupAlertStatus);
     }

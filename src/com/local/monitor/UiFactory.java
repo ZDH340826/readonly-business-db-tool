@@ -8,6 +8,8 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
+import javax.swing.JLabel;
+import javax.swing.table.DefaultTableCellRenderer;
 
 public final class UiFactory {
     private UiFactory() {
@@ -45,6 +47,13 @@ public final class UiFactory {
         table.getTableHeader().setPreferredSize(new Dimension(0, 36));
     }
 
+    public static void configureStatusColumn(JTable table, int modelColumn) {
+        if (modelColumn < 0 || modelColumn >= table.getColumnModel().getColumnCount()) {
+            throw new IllegalArgumentException("status column is out of range: " + modelColumn);
+        }
+        table.getColumnModel().getColumn(modelColumn).setCellRenderer(new SemanticStatusRenderer());
+    }
+
     private static JButton button(String text, Color background, Color foreground, Color border) {
         JButton button = new JButton(text);
         button.setFont(AppTheme.font(Font.BOLD, 14f));
@@ -58,5 +67,49 @@ public final class UiFactory {
         button.setOpaque(true);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return button;
+    }
+
+    private static final class SemanticStatusRenderer extends DefaultTableCellRenderer {
+        @Override
+        public java.awt.Component getTableCellRendererComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                boolean hasFocus,
+                int row,
+                int column) {
+            JLabel label = (JLabel) super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
+            String text = value == null ? "--" : String.valueOf(value);
+            Color semanticColor = statusColor(text);
+            label.setText(text);
+            label.setFont(AppTheme.font(Font.BOLD, 12f));
+            label.setForeground(semanticColor);
+            label.setBackground(isSelected ? table.getSelectionBackground() : AppTheme.softBackground(semanticColor));
+            label.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+            return label;
+        }
+
+        private static Color statusColor(String text) {
+            if (text.contains("查询失败") || text.contains("数据不可用")) {
+                return AppTheme.QUERY_FAILED;
+            }
+            if (text.contains("缺料") || text.contains("需关注") || text.contains("活跃报警")) {
+                return AppTheme.DANGER;
+            }
+            if (text.contains("观察中")) {
+                return AppTheme.WARNING;
+            }
+            if (text.contains("已关注")) {
+                return AppTheme.ACKNOWLEDGED;
+            }
+            if (text.contains("已恢复")) {
+                return AppTheme.RECOVERED;
+            }
+            if (text.contains("正常") || text.contains("有料")) {
+                return AppTheme.SUCCESS;
+            }
+            return AppTheme.MUTED;
+        }
     }
 }
