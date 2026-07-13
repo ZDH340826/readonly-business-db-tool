@@ -28,7 +28,7 @@ public final class GroupConfigStore {
         Properties p = new Properties();
         try (InputStream in = Files.newInputStream(path)) {
             p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
-        } catch (IOException ignored) {
+        } catch (IOException | IllegalArgumentException ignored) {
             return defaultGroups();
         }
 
