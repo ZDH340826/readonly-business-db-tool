@@ -88,6 +88,8 @@ if ($LASTEXITCODE -ne 0) { throw "point data query tests failed with exit code $
 if ($LASTEXITCODE -ne 0) { throw "ui preferences tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppThemeTest
 if ($LASTEXITCODE -ne 0) { throw "app theme tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppShellTest
+if ($LASTEXITCODE -ne 0) { throw "app shell tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionTest
 if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionRaceTest

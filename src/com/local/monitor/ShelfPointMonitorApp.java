@@ -299,8 +299,11 @@ extends JFrame {
 
     public ShelfPointMonitorApp() {
         super("\u53ea\u8bfb\u4e1a\u52a1\u6570\u636e\u5e93\u5de5\u5177");
+        AppTheme.install();
         this.setDefaultCloseOperation(3);
-        this.setMinimumSize(new Dimension(1180, 760));
+        this.setPreferredSize(AppTheme.PREFERRED_WINDOW_SIZE);
+        this.setMinimumSize(AppTheme.MINIMUM_WINDOW_SIZE);
+        this.setSize(AppTheme.PREFERRED_WINDOW_SIZE);
         this.addWindowListener(new WindowAdapter(){
 
             @Override
@@ -503,10 +506,6 @@ extends JFrame {
     }
 
     private void buildUi() {
-        JPanel panel = new JPanel(new BorderLayout(0, 0));
-        panel.setBackground(new Color(245, 247, 250));
-        this.setContentPane(panel);
-        panel.add((Component)this.buildTopStatusBar(), "North");
         this.navigationList.setSelectionMode(0);
         this.navigationList.setSelectedIndex(0);
         this.navigationList.addListSelectionListener(listSelectionEvent -> {
@@ -526,33 +525,23 @@ extends JFrame {
         this.cardPanel.add((Component)this.buildBrowserPage(), PAGE_BROWSER);
         this.cardPanel.add((Component)this.buildLogsSystemPage(), PAGE_LOGS);
         this.cardPanel.add((Component)this.buildSystemSettingsPage(), PAGE_SETTINGS);
-        JSplitPane jSplitPane = new JSplitPane(1, new JScrollPane(this.navigationList), this.cardPanel);
-        jSplitPane.setDividerLocation(210);
-        jSplitPane.setResizeWeight(0.0);
-        panel.add((Component)jSplitPane, "Center");
-        panel.add((Component)this.buildBottomStatusBar(), "South");
+        this.setContentPane(new AppShell(
+                this.navigationList,
+                this.cardPanel,
+                this.buildTopStatusBar(),
+                this.buildBottomStatusBar()));
     }
 
     private JPanel buildTopStatusBar() {
-        JPanel panel = new JPanel(new GridLayout(1, 4, 12, 0));
-        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 225, 232)), BorderFactory.createEmptyBorder(12, 16, 12, 16)));
-        panel.setBackground(Color.WHITE);
-        this.currentConnectionLabel.setFont(this.currentConnectionLabel.getFont().deriveFont(1));
-        panel.add(this.currentConnectionLabel);
-        panel.add(this.monitorStatusLabel);
-        panel.add(this.lastCheckLabel);
-        panel.add(this.nextCheckLabel);
-        return panel;
+        return new TopStatusBar(
+                this.currentConnectionLabel,
+                this.monitorStatusLabel,
+                this.lastCheckLabel,
+                this.nextCheckLabel);
     }
 
     private JPanel buildBottomStatusBar() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setPreferredSize(new Dimension(100, 28));
-        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(220, 225, 232)), BorderFactory.createEmptyBorder(4, 12, 4, 12)));
-        panel.setBackground(Color.WHITE);
-        panel.add((Component)this.bottomStatusLabel, "West");
-        panel.add((Component)new JLabel("\u7248\u672c\uff1a0.4.0"), "East");
-        return panel;
+        return new BottomStatusBar(this.bottomStatusLabel, EXPECTED_SELF_TEST_VERSION);
     }
 
     private JPanel buildOverviewPage() {
@@ -3736,6 +3725,7 @@ extends JFrame {
             System.err.println("ShelfPointMonitor LOOK_AND_FEEL_FAILED: "
                     + ShelfPointMonitorApp.userVisibleErrorMessage(exception));
         }
+        AppTheme.install();
     }
 
     static interface CheckedRunnable {
