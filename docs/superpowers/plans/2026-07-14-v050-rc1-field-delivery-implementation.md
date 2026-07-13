@@ -534,4 +534,3 @@ Re-run build, tests, preflight, path verification, diagnostic scan, ZIP hash, `g
 - Placeholder scan: the plan contains no TBD/TODO or deferred implementation.
 - Type consistency: page classes receive Swing components and callbacks; repositories and passwords are never passed to layout builders. Diagnostics and preflight have explicit path-based APIs reused by UI, CLI, tests, and packaging.
 - Execution choice: inline execution in the current session, because the user explicitly requires autonomous continuation and current instructions do not authorize subagents.
-
