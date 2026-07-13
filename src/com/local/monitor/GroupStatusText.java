@@ -7,6 +7,9 @@ public final class GroupStatusText {
     }
 
     public static String statusText(GroupAlertStatus status) {
+        if (status == GroupAlertStatus.QUERY_FAILED) {
+            return "查询失败";
+        }
         if (status == GroupAlertStatus.NORMAL) {
             return "正常";
         }
@@ -62,6 +65,10 @@ public final class GroupStatusText {
             int continuousMatchedSeconds,
             int alertDurationSeconds,
             List<PointStatusView> pointStatuses) {
+        if (status == GroupAlertStatus.QUERY_FAILED) {
+            return areaName + " / " + groupName + " / " + materialName
+                    + "：查询失败，本次未获得点位状态。";
+        }
         StringBuilder builder = new StringBuilder();
         builder.append(areaName)
                 .append(" / ")

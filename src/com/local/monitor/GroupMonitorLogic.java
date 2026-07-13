@@ -107,6 +107,48 @@ public final class GroupMonitorLogic {
                         pointStatuses));
     }
 
+    public static GroupEvaluation queryFailed(
+            PointGroupDefinition group,
+            GroupRuntimeState state,
+            LocalDateTime now,
+            String errorSummary) {
+        if (group == null) {
+            throw new IllegalArgumentException("group is required");
+        }
+        if (state == null) {
+            throw new IllegalArgumentException("runtime state is required");
+        }
+        if (now == null) {
+            throw new IllegalArgumentException("now is required");
+        }
+        state.markQueryFailed(now);
+        int backupTotal = 0;
+        for (GroupMonitorPoint point : group.points()) {
+            if (point.enabled() && point.role() == PointRole.BACKUP) {
+                backupTotal++;
+            }
+        }
+        String message = errorSummary == null || errorSummary.isBlank()
+                ? "查询失败：本次未能从数据库获得点位状态。"
+                : errorSummary;
+        return new GroupEvaluation(
+                group.id(),
+                group.areaName(),
+                group.groupName(),
+                group.materialName(),
+                GroupAlertStatus.QUERY_FAILED,
+                false,
+                backupTotal,
+                0,
+                0,
+                false,
+                0,
+                group.rule().durationSeconds(),
+                List.of(),
+                false,
+                message);
+    }
+
     static boolean isAvailable(PointRecord record) {
         return record != null
                 && !MonitorLogic.isBlank(record.podCode())

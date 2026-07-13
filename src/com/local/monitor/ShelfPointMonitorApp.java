@@ -160,6 +160,7 @@ public final class ShelfPointMonitorApp extends JFrame {
     private char[] currentPassword = new char[0];
     private ScheduledFuture<?> scheduledTask;
     private JDialog activeDialog;
+    private String activeDialogGroupId = "";
 
     public static void main(String[] args) {
         if (args.length > 0 && "--self-test".equals(args[0])) {
@@ -1193,7 +1194,18 @@ public final class ShelfPointMonitorApp extends JFrame {
                 records = fetcher.fetch(group);
             } catch (Exception ex) {
                 failedGroups++;
-                appendStatus(source + "失败，点位组 " + group.id() + " 数据库查询失败：" + ex.getMessage());
+                String errorSummary = queryFailureMessage(ex);
+                GroupEvaluation evaluation;
+                synchronized (groupMonitorLock) {
+                    evaluation = GroupMonitorLogic.queryFailed(group, state, now, errorSummary);
+                }
+                appendCheckLog(now, evaluation);
+                appendGroupEvents(now, evaluation);
+                evaluations.add(evaluation);
+                closeActiveGroupAlertDialogIfOwnedBy(group.id());
+                updateSelectedGroupBoard(evaluation);
+                runtime.append(formatGroupCheckResult(source, List.of(), evaluation)).append(System.lineSeparator());
+                appendStatus(source + "失败，点位组 " + group.id() + " " + errorSummary);
                 continue;
             }
             GroupEvaluation evaluation;
@@ -1265,12 +1277,23 @@ public final class ShelfPointMonitorApp extends JFrame {
             lastGroupStatuses.put(evaluation.groupId(), evaluation.status());
         }
         try {
-            if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
-                    && previous != GroupAlertStatus.ACTIVE_ALERT
-                    && previous != GroupAlertStatus.ACKED_ALERT) {
-                groupLogWriter.appendEvent(now, "ALERT_OPEN", evaluation);
-            } else if (evaluation.status() == GroupAlertStatus.NORMAL && previous != GroupAlertStatus.NORMAL) {
-                groupLogWriter.appendEvent(now, "RECOVERED", evaluation);
+            if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
+                if (previous != GroupAlertStatus.QUERY_FAILED) {
+                    groupLogWriter.appendEvent(now, "QUERY_FAILED", evaluation);
+                }
+            } else {
+                if (previous == GroupAlertStatus.QUERY_FAILED) {
+                    groupLogWriter.appendEvent(now, "QUERY_RECOVERED", evaluation);
+                }
+                if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
+                        && previous != GroupAlertStatus.ACTIVE_ALERT
+                        && previous != GroupAlertStatus.ACKED_ALERT) {
+                    groupLogWriter.appendEvent(now, "ALERT_OPEN", evaluation);
+                } else if (evaluation.status() == GroupAlertStatus.NORMAL
+                        && previous != GroupAlertStatus.NORMAL
+                        && previous != GroupAlertStatus.QUERY_FAILED) {
+                    groupLogWriter.appendEvent(now, "RECOVERED", evaluation);
+                }
             }
         } catch (Exception ex) {
             appendStatus("CSV事件日志写入失败：" + ex.getMessage());
@@ -1285,6 +1308,27 @@ public final class ShelfPointMonitorApp extends JFrame {
         constraints.fill = GridBagConstraints.BOTH;
         constraints.weightx = 1.0;
         constraints.weighty = 0.0;
+
+        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
+            JPanel card = new JPanel(new GridLayout(0, 1, 4, 4));
+            card.setBackground(new Color(255, 250, 230));
+            card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+                    javax.swing.BorderFactory.createLineBorder(new Color(190, 120, 30), 2),
+                    javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+            JLabel title = new JLabel("查询失败");
+            title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
+            title.setForeground(new Color(160, 92, 20));
+            card.add(title);
+            card.add(new JLabel(evaluation.message()));
+            card.add(new JLabel("本次未获得点位状态，不按无料处理。"));
+            constraints.gridx = 0;
+            constraints.gridy = 0;
+            constraints.gridwidth = 4;
+            pointStatusPanel.add(card, constraints);
+            pointStatusPanel.revalidate();
+            pointStatusPanel.repaint();
+            return;
+        }
 
         List<PointStatusView> usePoints = new ArrayList<>();
         List<PointStatusView> backupPoints = new ArrayList<>();
@@ -1361,22 +1405,70 @@ public final class ShelfPointMonitorApp extends JFrame {
     }
 
     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
-        String message = GroupStatusText.summary(
-                evaluation.areaName(),
-                evaluation.groupName(),
-                evaluation.materialName(),
-                evaluation.status(),
-                evaluation.usePointEmpty(),
-                evaluation.backupTotal(),
-                evaluation.backupAvailableCount(),
-                evaluation.continuousMatchedSeconds(),
-                evaluation.alertDurationSeconds(),
-                evaluation.pointStatuses());
+        String message;
+        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED
+                && evaluation.message() != null
+                && !evaluation.message().isBlank()) {
+            message = evaluation.message();
+        } else {
+            message = GroupStatusText.summary(
+                    evaluation.areaName(),
+                    evaluation.groupName(),
+                    evaluation.materialName(),
+                    evaluation.status(),
+                    evaluation.usePointEmpty(),
+                    evaluation.backupTotal(),
+                    evaluation.backupAvailableCount(),
+                    evaluation.continuousMatchedSeconds(),
+                    evaluation.alertDurationSeconds(),
+                    evaluation.pointStatuses());
+        }
         return TIME_FORMAT.format(LocalDateTime.now())
                 + " "
                 + GroupStatusText.statusText(evaluation.status())
                 + "："
                 + message;
+    }
+
+    private static String queryFailureMessage(Exception ex) {
+        return "查询失败：" + sanitizedExceptionSummary(ex);
+    }
+
+    private static String sanitizedExceptionSummary(Exception ex) {
+        String raw = ex == null ? "" : ex.getMessage();
+        if (raw == null || raw.isBlank()) {
+            raw = ex == null ? "未知错误" : ex.getClass().getSimpleName();
+        } else if (ex != null) {
+            raw = ex.getClass().getSimpleName() + ": " + raw;
+        }
+        String safe = raw.replace('\r', ' ').replace('\n', ' ');
+        safe = safe.replaceAll("(?i)jdbc:[^\\s,;]+", "jdbc:***");
+        safe = safe.replaceAll("(?i)((?:password|passwd|pwd|token|access_token|secret)\\s*[=:]\\s*)[^\\s,;]+",
+                "$1***");
+        safe = safe.replaceAll("(?i)((?:user\\s*id|uid|user(?:name)?|role)\\s*[=:]\\s*)[^\\s,;]+",
+                "$1***");
+        safe = safe.replaceAll("(?i)user\\s+\"[^\"]+\"", "user ***");
+        safe = safe.replaceAll("(?i)user\\s+'[^']+'", "user ***");
+        safe = safe.replaceAll("(?i)role\\s+\"[^\"]+\"", "role ***");
+        safe = safe.replaceAll("(?i)role\\s+'[^']+'", "role ***");
+        safe = safe.replaceAll("\\bat\\s+[A-Za-z0-9_.$]+\\([^)]*\\)", "");
+        safe = safe.replaceAll("[A-Za-z0-9_.$-]+\\.java:\\d+", "***.java:***");
+        safe = safe.replaceAll("\\s+", " ").trim();
+        if (safe.length() > 180) {
+            safe = safe.substring(0, 177) + "...";
+        }
+        return safe.isBlank() ? "未知错误" : safe;
+    }
+
+    private void closeActiveGroupAlertDialogIfOwnedBy(String groupId) {
+        SwingUtilities.invokeLater(() -> {
+            if (activeDialog == null || groupId == null || !groupId.equals(activeDialogGroupId)) {
+                return;
+            }
+            activeDialog.dispose();
+            activeDialog = null;
+            activeDialogGroupId = "";
+        });
     }
 
     private void startMonitoring() {
@@ -1440,11 +1532,13 @@ public final class ShelfPointMonitorApp extends JFrame {
             dialog.add(buildGroupAlertButtons(evaluation, () -> {
                 dialog.dispose();
                 activeDialog = null;
+                activeDialogGroupId = "";
             }), BorderLayout.SOUTH);
 
             dialog.setSize(640, 420);
             dialog.setLocationRelativeTo(this);
             activeDialog = dialog;
+            activeDialogGroupId = evaluation.groupId();
             dialog.setVisible(true);
         });
     }
@@ -1754,6 +1848,7 @@ public final class ShelfPointMonitorApp extends JFrame {
                 appendStatus("用户已关注报警：" + evaluation.alertKey());
                 dialog.dispose();
                 activeDialog = null;
+                activeDialogGroupId = "";
             });
             JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
             buttons.add(ack);
@@ -1762,6 +1857,7 @@ public final class ShelfPointMonitorApp extends JFrame {
             dialog.setSize(520, 320);
             dialog.setLocationRelativeTo(this);
             activeDialog = dialog;
+            activeDialogGroupId = "";
             dialog.setVisible(true);
         });
     }
