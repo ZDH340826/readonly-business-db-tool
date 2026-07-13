@@ -82,6 +82,22 @@ if ($LASTEXITCODE -ne 0) { throw "group log writer tests failed with exit code $
 if ($LASTEXITCODE -ne 0) { throw "connection profile tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DbMetadataRepositoryTest
 if ($LASTEXITCODE -ne 0) { throw "metadata repository tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PointDataQueryRepositoryTest
+if ($LASTEXITCODE -ne 0) { throw "point data query tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.UiPreferencesStoreTest
+if ($LASTEXITCODE -ne 0) { throw "ui preferences tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionTest
+if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionRaceTest
+if ($LASTEXITCODE -ne 0) { throw "monitoring session race tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ErrorSanitizationTest
+if ($LASTEXITCODE -ne 0) { throw "error sanitization tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ExecutorSeparationTest
+if ($LASTEXITCODE -ne 0) { throw "executor separation tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SystemHealthStatusTest
+if ($LASTEXITCODE -ne 0) { throw "system health status tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SourceHygieneTest
+if ($LASTEXITCODE -ne 0) { throw "source hygiene tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorAppUiTest
 if ($LASTEXITCODE -ne 0) { throw "ui layout tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorSelfTestTest
