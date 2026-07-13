@@ -98,6 +98,10 @@ if ($LASTEXITCODE -ne 0) { throw "group and connection page tests failed with ex
 if ($LASTEXITCODE -ne 0) { throw "CSV export service tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DataPagesTest
 if ($LASTEXITCODE -ne 0) { throw "data page tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DiagnosticBundleServiceTest
+if ($LASTEXITCODE -ne 0) { throw "diagnostic bundle tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.LogsSettingsPageTest
+if ($LASTEXITCODE -ne 0) { throw "logs and settings page tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionTest
 if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionRaceTest

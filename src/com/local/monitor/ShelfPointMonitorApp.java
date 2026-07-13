@@ -698,100 +698,46 @@ extends JFrame {
     }
 
     private JPanel buildLogsSystemPage() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createTitledBorder(PAGE_LOGS));
-        JPanel panel2 = new JPanel(new GridLayout(1, 6, 8, 0));
-        panel2.add(this.browserStatCard(this.schedulerHealthLabel));
-        panel2.add(this.browserStatCard(this.connectionHealthLabel));
-        panel2.add(this.browserStatCard(this.detectionHealthLabel));
-        panel2.add(this.browserStatCard(this.configHealthLabel));
-        panel2.add(this.browserStatCard(this.logDirHealthLabel));
-        panel2.add(this.browserStatCard(this.selfTestHealthLabel));
-        JPanel panel3 = new JPanel(new FlowLayout(0, 8, 0));
-        panel3.add(new JLabel("\u4e8b\u4ef6\u7c7b\u578b\uff1a"));
-        panel3.add(this.systemLogTypeFilterBox);
-        panel3.add(new JLabel("\u65f6\u95f4\u8d77\uff1a"));
-        panel3.add(this.systemLogFromField);
-        panel3.add(new JLabel("\u65f6\u95f4\u6b62\uff1a"));
-        panel3.add(this.systemLogToField);
-        panel3.add(new JLabel("\u70b9\u4f4d\u7ec4\uff1a"));
-        panel3.add(this.systemLogGroupField);
-        panel3.add(new JLabel("\u5173\u952e\u5b57\uff1a"));
-        panel3.add(this.systemLogKeywordField);
-        JButton button = new JButton("\u5237\u65b0\u65e5\u5fd7");
-        JButton button2 = new JButton("\u6253\u5f00\u65e5\u5fd7\u76ee\u5f55");
-        JButton button3 = new JButton("\u6267\u884c\u81ea\u68c0");
-        JButton button4 = new JButton("\u5bfc\u51fa\u8bca\u65ad\u4fe1\u606f");
-        panel3.add(button);
-        panel3.add(button2);
-        panel3.add(button3);
-        panel3.add(button4);
-        JPanel panel4 = new JPanel(new BorderLayout(8, 8));
-        panel4.add((Component)panel2, "North");
-        panel4.add((Component)panel3, "South");
-        panel.add((Component)panel4, "North");
-        this.systemLogTable.setSelectionMode(0);
-        this.systemLogTable.setRowHeight(26);
-        this.systemLogTable.getSelectionModel().addListSelectionListener(listSelectionEvent -> {
-            if (!listSelectionEvent.getValueIsAdjusting()) {
-                this.updateSystemLogDetail();
-            }
-        });
-        this.systemLogDetailArea.setEditable(false);
-        this.systemLogDetailArea.setLineWrap(true);
-        this.systemLogDetailArea.setWrapStyleWord(true);
-        JSplitPane jSplitPane = new JSplitPane(1, new JScrollPane(this.systemLogTable), new JScrollPane(this.systemLogDetailArea));
-        jSplitPane.setDividerLocation(720);
-        jSplitPane.setResizeWeight(0.7);
-        JSplitPane jSplitPane2 = new JSplitPane(0, jSplitPane, new JScrollPane(this.statusArea));
-        jSplitPane2.setDividerLocation(430);
-        jSplitPane2.setResizeWeight(0.75);
-        panel.add((Component)jSplitPane2, "Center");
-        button.addActionListener(actionEvent -> this.loadSystemLogs());
-        this.systemLogTypeFilterBox.addActionListener(actionEvent -> this.requestSystemLogRefreshDebounced());
-        this.systemLogFromField.addActionListener(actionEvent -> this.requestSystemLogRefreshDebounced());
-        this.systemLogToField.addActionListener(actionEvent -> this.requestSystemLogRefreshDebounced());
-        this.systemLogGroupField.addActionListener(actionEvent -> this.requestSystemLogRefreshDebounced());
-        this.systemLogKeywordField.addActionListener(actionEvent -> this.requestSystemLogRefreshDebounced());
-        button2.addActionListener(actionEvent -> this.runIoInBackground(this::openLogs));
-        button3.addActionListener(actionEvent -> this.runIoInBackground(this::executeSelfTestFromUi));
-        button4.addActionListener(actionEvent -> this.runIoInBackground(this::exportDiagnostics));
-        return panel;
+        LogsSystemPage.Components components = new LogsSystemPage.Components(
+                this.schedulerHealthLabel,
+                this.connectionHealthLabel,
+                this.detectionHealthLabel,
+                this.configHealthLabel,
+                this.logDirHealthLabel,
+                this.selfTestHealthLabel,
+                this.systemLogTypeFilterBox,
+                this.systemLogFromField,
+                this.systemLogToField,
+                this.systemLogGroupField,
+                this.systemLogKeywordField,
+                this.systemLogTable,
+                this.systemLogDetailArea,
+                this.statusArea);
+        LogsSystemPage.Actions actions = new LogsSystemPage.Actions(
+                this::loadSystemLogs,
+                this::requestSystemLogRefreshDebounced,
+                () -> this.runIoInBackground(this::openLogs),
+                () -> this.runIoInBackground(this::executeSelfTestFromUi),
+                () -> this.runIoInBackground(this::exportDiagnostics),
+                this::updateSystemLogDetail);
+        return new LogsSystemPage(components, actions);
     }
 
     private JPanel buildSystemSettingsPage() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createTitledBorder(PAGE_SETTINGS));
-        JPanel panel2 = new JPanel(new GridBagLayout());
-        int index = 0;
-        this.addField(panel2, index, 0, "\u9ed8\u8ba4\u9996\u9875", this.settingsDefaultPageBox);
-        this.addField(panel2, index, 2, "\u76d1\u63a7\u603b\u89c8\u81ea\u52a8\u5237\u65b0\u95f4\u9694(\u79d2)", this.settingsOverviewRefreshSpinner);
-        this.addCheckBox(panel2, ++index, 0, this.settingsAlertPopupBox);
-        this.addCheckBox(panel2, index, 2, this.settingsAlertSoundBox);
-        this.addField(panel2, ++index, 0, "\u65e5\u5fd7\u4fdd\u7559\u5929\u6570", this.settingsLogRetentionSpinner);
-        this.addField(panel2, index, 2, "\u754c\u9762\u663e\u793a\u5bc6\u5ea6", this.settingsDensityBox);
-        this.addCheckBox(panel2, ++index, 0, this.settingsStartupSelfTestBox);
-        this.addCheckBox(panel2, index, 2, this.settingsAutoCleanupLogsBox);
-        JPanel panel3 = new JPanel(new GridLayout(0, 1, 6, 6));
-        panel3.setBorder(BorderFactory.createTitledBorder("\u56fa\u5b9a\u5b89\u5168\u9879"));
-        panel3.add(new JLabel("\u654f\u611f\u4fe1\u606f\u8131\u654f\uff1a\u5f3a\u5236\u542f\u7528"));
-        panel3.add(new JLabel("\u6570\u636e\u5e93\u8bbf\u95ee\u6a21\u5f0f\uff1a\u53ea\u8bfb"));
-        panel3.add(new JLabel("SQL \u7f16\u8f91\u80fd\u529b\uff1a\u672a\u63d0\u4f9b"));
-        panel3.add(new JLabel("\u5bc6\u7801\u6301\u4e45\u5316\uff1a\u7981\u6b62"));
-        JPanel panel4 = new JPanel(new FlowLayout(2, 8, 0));
-        JButton button = new JButton("\u4fdd\u5b58\u8bbe\u7f6e");
-        JButton button2 = new JButton("\u6062\u590d\u9ed8\u8ba4");
-        JButton button3 = new JButton("\u91cd\u65b0\u52a0\u8f7d\u914d\u7f6e");
-        panel4.add(button);
-        panel4.add(button2);
-        panel4.add(button3);
-        button.addActionListener(actionEvent -> this.saveUiPreferences());
-        button2.addActionListener(actionEvent -> this.restoreUiPreferences());
-        button3.addActionListener(actionEvent -> this.reloadUiPreferences());
-        panel.add((Component)panel2, "North");
-        panel.add((Component)panel3, "Center");
-        panel.add((Component)panel4, "South");
-        return panel;
+        SystemSettingsPage.Components components = new SystemSettingsPage.Components(
+                this.settingsDefaultPageBox,
+                this.settingsOverviewRefreshSpinner,
+                this.settingsAlertPopupBox,
+                this.settingsAlertSoundBox,
+                this.settingsLogRetentionSpinner,
+                this.settingsDensityBox,
+                this.settingsStartupSelfTestBox,
+                this.settingsAutoCleanupLogsBox);
+        SystemSettingsPage.Actions actions = new SystemSettingsPage.Actions(
+                this::saveUiPreferences,
+                this::restoreUiPreferences,
+                this::reloadUiPreferences);
+        return new SystemSettingsPage(components, actions);
     }
 
     private void addCheckBox(JPanel panel, int index, int index2, JCheckBox jCheckBox) {
@@ -2914,31 +2860,11 @@ extends JFrame {
     }
 
     static String sanitizeVisibleLog(String text) {
-        if (text == null) {
-            return "";
-        }
-        return ShelfPointMonitorApp.sanitizeSensitiveText(text);
+        return SensitiveTextSanitizer.sanitize(text);
     }
 
     private static String sanitizeSensitiveText(String text) {
-        String sanitized = text.replace('\r', ' ').replace('\n', ' ');
-        sanitized = sanitized.replaceAll("(?i)jdbc:[^\\s,;]+", "<JDBC>");
-        sanitized = sanitized.replaceAll("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", "<IP>");
-        sanitized = sanitized.replaceAll("(?i)[A-Z]:[\\\\/][^\\r\\n]*", "<\u672c\u5730\u8def\u5f84>");
-        sanitized = sanitized.replaceAll("(?i)((?:password|passwd|pwd|token|access_token|secret)\\s*[=:]\\s*)[^\\s,;]+", "$1***");
-        sanitized = sanitized.replaceAll("(?i)\\b((?:password|passwd|pwd|token|access[_-]?token|secret))\\s+(?:is\\s+)?[^\\s,;]+", "$1 ***");
-        sanitized = sanitized.replaceAll("(?i)\\bbearer\\s+[^\\s,;]+", "Bearer ***");
-        sanitized = sanitized.replaceAll("(?i)((?:user\\s*id|uid|user(?:name)?|databaseUser|db_user|role)\\s*[=:]\\s*)[^\\s,;]+", "$1***");
-        sanitized = sanitized.replaceAll("(?i)\\b((?:user\\s*id|uid|user(?:name)?|databaseUser|db_user))\\s+[^\\s,;]+", "$1 ***");
-        sanitized = sanitized.replaceAll("(?i)((?:host|port)\\s*[=:]\\s*)[^\\s,;]+", "$1***");
-        sanitized = sanitized.replaceAll("(?i)for\\s+user\\s+(?:\"[^\"]+\"|'[^']+'|[A-Za-z0-9_.@-]+)", "for user ***");
-        sanitized = sanitized.replaceAll("(?i)user\\s+(?:\"[^\"]+\"|'[^']+'|[A-Za-z0-9_.@-]+)", "user ***");
-        sanitized = sanitized.replaceAll("(?i)role\\s+\"[^\"]+\"", "role ***");
-        sanitized = sanitized.replaceAll("(?i)role\\s+'[^']+'", "role ***");
-        sanitized = sanitized.replaceAll("(?i)role\\s+[A-Za-z0-9_.@-]+", "role ***");
-        sanitized = sanitized.replaceAll("\\bat\\s+[A-Za-z0-9_.$@/:-]+\\([^)]*\\)", "");
-        sanitized = sanitized.replaceAll("[A-Za-z0-9_.$-]+\\.java:\\d+", "<\u4ee3\u7801\u4f4d\u7f6e>");
-        return sanitized.replaceAll("\\s+", " ").trim();
+        return SensitiveTextSanitizer.sanitize(text);
     }
 
     private void executeSelfTestFromUi() throws Exception {
@@ -2950,10 +2876,8 @@ extends JFrame {
 
     private void exportDiagnostics() {
         try {
-            Files.createDirectories(Paths.get("diagnostics"));
-            Path path = Paths.get("diagnostics", "diagnostic-" + System.currentTimeMillis() + ".txt");
-            String text = "\u53ea\u8bfb\u4e1a\u52a1\u6570\u636e\u5e93\u5de5\u5177\u8bca\u65ad\u4fe1\u606f" + System.lineSeparator() + "time=" + TIME_FORMAT.format(LocalDateTime.now()) + System.lineSeparator() + "monitor=" + this.monitorStatusLabel.getText() + System.lineSeparator() + "connection=" + ShelfPointMonitorApp.sanitizeVisibleLog(this.currentConnectionLabel.getText()) + System.lineSeparator() + "groups=" + this.pointGroups.size() + System.lineSeparator();
-            Files.writeString(path, text, StandardCharsets.UTF_8);
+            Path path = DiagnosticBundleService.create(
+                    Path.of(""), Paths.get("diagnostics"), EXPECTED_SELF_TEST_VERSION);
             this.appendStatus("\u8bca\u65ad\u4fe1\u606f\u5df2\u5bfc\u51fa\uff1a" + String.valueOf(path.getFileName()));
         }
         catch (Exception exception) {
