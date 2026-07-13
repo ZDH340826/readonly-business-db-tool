@@ -94,6 +94,10 @@ if ($LASTEXITCODE -ne 0) { throw "app shell tests failed with exit code $LASTEXI
 if ($LASTEXITCODE -ne 0) { throw "overview and alert page tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupConnectionPageTest
 if ($LASTEXITCODE -ne 0) { throw "group and connection page tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.CsvExportServiceTest
+if ($LASTEXITCODE -ne 0) { throw "CSV export service tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DataPagesTest
+if ($LASTEXITCODE -ne 0) { throw "data page tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionTest
 if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionRaceTest

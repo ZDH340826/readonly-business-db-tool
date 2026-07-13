@@ -593,55 +593,22 @@ extends JFrame {
     }
 
     private JPanel buildBrowserPage() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createTitledBorder("\u6570\u636e\u6e90\u6d4f\u89c8\u5668\uff08\u53ea\u8bfb\uff09"));
-        JPanel panel2 = new JPanel(new GridLayout(1, 4, 8, 0));
-        panel2.add(this.browserStatCard(this.schemaCountLabel));
-        panel2.add(this.browserStatCard(this.objectCountLabel));
-        panel2.add(this.browserStatCard(this.objectTypeLabel));
-        panel2.add(this.browserStatCard(this.browserModeLabel));
-        JPanel panel3 = new JPanel(new FlowLayout(0));
-        JButton button = new JButton("\u5237\u65b0 Schema");
-        JButton button2 = new JButton("\u52a0\u8f7d\u8868/\u89c6\u56fe");
-        JButton button3 = new JButton("\u9884\u89c8\u524d100\u884c");
-        panel3.add(new JLabel("Schema\uff1a"));
-        panel3.add(this.schemaBox);
-        panel3.add(button);
-        panel3.add(button2);
-        panel3.add(button3);
-        JPanel panel4 = new JPanel(new BorderLayout());
-        panel4.add((Component)panel2, "North");
-        panel4.add((Component)panel3, "South");
-        panel.add((Component)panel4, "North");
-        this.browserTable.setSelectionMode(0);
-        this.browserTable.getSelectionModel().addListSelectionListener(listSelectionEvent -> {
-            if (!listSelectionEvent.getValueIsAdjusting()) {
-                this.loadSelectedTableColumns();
-            }
-        });
-        this.columnTable.setSelectionMode(0);
-        JPanel panel5 = new JPanel(new BorderLayout(6, 6));
-        panel5.setBorder(BorderFactory.createTitledBorder("Schema / \u8868 / \u89c6\u56fe\u5bf9\u8c61\u6811"));
-        JSplitPane jSplitPane = new JSplitPane(0, new JScrollPane(this.dataSourceTree), new JScrollPane(this.browserTable));
-        jSplitPane.setDividerLocation(180);
-        panel5.add((Component)jSplitPane, "Center");
-        JPanel panel6 = new JPanel(new BorderLayout(6, 6));
-        panel6.setBorder(BorderFactory.createTitledBorder("\u5bf9\u8c61\u5143\u6570\u636e\u4e0e\u5217\u4fe1\u606f"));
-        panel6.add((Component)new JScrollPane(this.columnTable), "Center");
-        JPanel panel7 = new JPanel(new BorderLayout(6, 6));
-        panel7.setBorder(BorderFactory.createTitledBorder("\u524d 100 \u884c\u53ea\u8bfb\u9884\u89c8"));
-        panel7.add((Component)new JScrollPane(this.previewTable), "Center");
-        JSplitPane jSplitPane2 = new JSplitPane(1, panel6, panel7);
-        jSplitPane2.setDividerLocation(430);
-        jSplitPane2.setResizeWeight(0.45);
-        JSplitPane jSplitPane3 = new JSplitPane(1, panel5, jSplitPane2);
-        jSplitPane3.setDividerLocation(320);
-        jSplitPane3.setResizeWeight(0.25);
-        panel.add((Component)jSplitPane3, "Center");
-        button.addActionListener(actionEvent -> this.runOnceInBackground(this::refreshSchemas));
-        button2.addActionListener(actionEvent -> this.runOnceInBackground(this::loadTablesForSelectedSchema));
-        button3.addActionListener(actionEvent -> this.runOnceInBackground(this::previewSelectedTable));
-        return panel;
+        DataSourceBrowserPage.Components components = new DataSourceBrowserPage.Components(
+                this.schemaCountLabel,
+                this.objectCountLabel,
+                this.objectTypeLabel,
+                this.browserModeLabel,
+                this.schemaBox,
+                this.dataSourceTree,
+                this.browserTable,
+                this.columnTable,
+                this.previewTable);
+        DataSourceBrowserPage.Actions actions = new DataSourceBrowserPage.Actions(
+                () -> this.runOnceInBackground(this::refreshSchemas),
+                () -> this.runOnceInBackground(this::loadTablesForSelectedSchema),
+                this::loadSelectedTableColumns,
+                () -> this.runOnceInBackground(this::previewSelectedTable));
+        return new DataSourceBrowserPage(components, actions);
     }
 
     private JPanel browserStatCard(JLabel label) {
@@ -653,68 +620,30 @@ extends JFrame {
     }
 
     private JPanel buildDataQueryPage() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createTitledBorder("\u6570\u636e\u67e5\u8be2\uff08\u7ed3\u6784\u5316\u53ea\u8bfb\uff09"));
-        JPanel panel2 = new JPanel(new GridBagLayout());
-        int index = 0;
-        this.addField(panel2, index, 0, "\u70b9\u4f4d\u7f16\u7801\u5173\u952e\u5b57", this.queryPointKeywordField);
-        this.addField(panel2, index, 2, "\u8d27\u67b6\u7f16\u53f7\u5173\u952e\u5b57", this.queryShelfKeywordField);
-        this.addField(panel2, index, 4, "\u533a\u57df\u7f16\u7801", this.queryAreaCodeField);
-        this.addField(panel2, ++index, 0, "\u5173\u8054\u533a\u57df\u7f16\u7801", this.queryRelateAreaCodeField);
-        this.addField(panel2, index, 2, "\u66f4\u65b0\u65f6\u95f4\u8d77", this.queryUpdatedFromField);
-        this.addField(panel2, index, 4, "\u66f4\u65b0\u65f6\u95f4\u6b62", this.queryUpdatedToField);
-        this.addField(panel2, ++index, 0, "\u884c\u6570\u4e0a\u9650", this.queryLimitSpinner);
-        JButton button = new JButton("\u6267\u884c\u53ea\u8bfb\u67e5\u8be2");
-        button.addActionListener(actionEvent -> this.startPointDataQuery(true));
-        GridBagConstraints gridBagConstraints = this.gbc(2, index);
-        gridBagConstraints.gridwidth = 2;
-        gridBagConstraints.fill = 2;
-        panel2.add((Component)button, gridBagConstraints);
-        JPanel panel3 = new JPanel(new FlowLayout(0, 8, 0));
-        panel3.add(this.queryPrevButton);
-        panel3.add(this.queryNextButton);
-        panel3.add(this.queryPageLabel);
-        panel3.add(this.queryTotalLabel);
-        GridBagConstraints gridBagConstraints2 = this.gbc(4, index);
-        gridBagConstraints2.gridwidth = 2;
-        gridBagConstraints2.fill = 2;
-        panel2.add((Component)panel3, gridBagConstraints2);
         this.queryPrevButton.setEnabled(false);
         this.queryNextButton.setEnabled(false);
-        this.queryPrevButton.addActionListener(actionEvent -> {
-            if (this.queryCurrentPage > 1) {
-                --this.queryCurrentPage;
-                this.startPointDataQuery(false);
-            }
-        });
-        this.queryNextButton.addActionListener(actionEvent -> {
-            ++this.queryCurrentPage;
-            this.startPointDataQuery(false);
-        });
-        this.dataQueryTable.setSelectionMode(0);
-        this.dataQueryTable.setRowHeight(26);
-        this.dataQueryTable.getSelectionModel().addListSelectionListener(listSelectionEvent -> {
-            if (!listSelectionEvent.getValueIsAdjusting()) {
-                this.updateDataQueryDetail();
-            }
-        });
-        this.dataQueryDetailArea.setEditable(false);
-        this.dataQueryDetailArea.setLineWrap(true);
-        this.dataQueryDetailArea.setWrapStyleWord(true);
-        this.dataQueryDetailArea.setText("\u53ea\u8bfb\u67e5\u8be2\n\u4e0d\u652f\u6301 SQL \u7f16\u8f91\n\u4e0d\u652f\u6301\u6570\u636e\u4fee\u6539");
-        JSplitPane jSplitPane = new JSplitPane(1, new JScrollPane(this.dataQueryTable), new JScrollPane(this.dataQueryDetailArea));
-        jSplitPane.setDividerLocation(760);
-        jSplitPane.setResizeWeight(0.75);
-        JPanel panel4 = new JPanel(new GridLayout(0, 1, 4, 4));
-        panel4.setBorder(BorderFactory.createTitledBorder("\u5b89\u5168\u8fb9\u754c"));
-        panel4.add(new JLabel("\u53ea\u8bfb\u67e5\u8be2"));
-        panel4.add(new JLabel("\u4e0d\u652f\u6301 SQL \u7f16\u8f91"));
-        panel4.add(new JLabel("\u4e0d\u652f\u6301\u6570\u636e\u4fee\u6539"));
-        panel4.add(new JLabel("\u56fa\u5b9a\u6765\u6e90\u8868\uff1atcs_map_data"));
-        panel.add((Component)panel2, "North");
-        panel.add((Component)jSplitPane, "Center");
-        panel.add((Component)panel4, "South");
-        return panel;
+        DataQueryPage.Components components = new DataQueryPage.Components(
+                this.queryPointKeywordField,
+                this.queryShelfKeywordField,
+                this.queryAreaCodeField,
+                this.queryRelateAreaCodeField,
+                this.queryUpdatedFromField,
+                this.queryUpdatedToField,
+                this.queryLimitSpinner,
+                this.queryPrevButton,
+                this.queryNextButton,
+                this.queryPageLabel,
+                this.queryTotalLabel,
+                this.dataQueryTable,
+                this.dataQueryDetailArea);
+        DataQueryPage.Actions actions = new DataQueryPage.Actions(
+                () -> this.startPointDataQuery(true),
+                this::showPreviousPointDataQueryPage,
+                this::showNextPointDataQueryPage,
+                this::exportCurrentPointDataQueryResult,
+                this::updateDataQueryDetail,
+                this::resetPointDataQueryPage);
+        return new DataQueryPage(components, actions);
     }
 
     private JPanel buildGroupManagementPage() {
@@ -2678,6 +2607,55 @@ extends JFrame {
             return pointGroupDefinition;
         }
         return null;
+    }
+
+    private void resetPointDataQueryPage() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::resetPointDataQueryPage);
+            return;
+        }
+        this.queryCurrentPage = 1;
+        this.queryPrevButton.setEnabled(false);
+        this.queryPageLabel.setText("\u7b2c 1 / -- \u9875");
+    }
+
+    private void showPreviousPointDataQueryPage() {
+        if (this.queryCurrentPage > 1) {
+            --this.queryCurrentPage;
+            this.startPointDataQuery(false);
+        }
+    }
+
+    private void showNextPointDataQueryPage() {
+        ++this.queryCurrentPage;
+        this.startPointDataQuery(false);
+    }
+
+    private void exportCurrentPointDataQueryResult() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::exportCurrentPointDataQueryResult);
+            return;
+        }
+        List<String> headers = new ArrayList<String>();
+        for (int column = 0; column < this.dataQueryModel.getColumnCount(); column++) {
+            headers.add(this.dataQueryModel.getColumnName(column));
+        }
+        List<List<String>> rows = new ArrayList<List<String>>();
+        for (int row = 0; row < this.dataQueryModel.getRowCount(); row++) {
+            List<String> values = new ArrayList<String>();
+            for (int column = 0; column < this.dataQueryModel.getColumnCount(); column++) {
+                Object value = this.dataQueryModel.getValueAt(row, column);
+                values.add(value == null ? "" : String.valueOf(value));
+            }
+            rows.add(List.copyOf(values));
+        }
+        List<String> headerSnapshot = List.copyOf(headers);
+        List<List<String>> rowSnapshot = List.copyOf(rows);
+        Path output = Paths.get("exports", "query-page-" + System.currentTimeMillis() + ".csv");
+        this.runIoInBackground(() -> {
+            CsvExportService.writeUtf8(output, headerSnapshot, rowSnapshot);
+            this.appendStatus("\u5df2\u5bfc\u51fa\u5f53\u524d\u67e5\u8be2\u7ed3\u679c\uff1a" + output.getFileName());
+        });
     }
 
     private void startPointDataQuery(boolean flag) {
