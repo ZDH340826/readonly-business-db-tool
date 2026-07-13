@@ -17,7 +17,10 @@ public final class ReadOnlyConnectionFactory {
         Properties props = new Properties();
         props.setProperty("user", config.isLocalTest() ? "sa" : config.user());
         props.setProperty("password", config.isLocalTest() ? "" : new String(password));
-        Connection conn = DriverManager.getConnection(config.jdbcUrl(), props);
+        String jdbcUrl = config.isLocalTest()
+                ? config.jdbcUrl() + ";ACCESS_MODE_DATA=r"
+                : config.jdbcUrl();
+        Connection conn = DriverManager.getConnection(jdbcUrl, props);
         conn.setReadOnly(true);
         conn.setAutoCommit(false);
         try (Statement st = conn.createStatement()) {

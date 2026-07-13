@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 public final class SourceHygieneTest {
+    private static final Path SOURCE_ROOT = Path.of("src", "com", "local", "monitor");
     private static final Path APP_SOURCE = Path.of("src", "com", "local", "monitor", "ShelfPointMonitorApp.java");
 
     private SourceHygieneTest() {
@@ -32,8 +33,20 @@ public final class SourceHygieneTest {
         assertPatternAbsent(source, "\\bchar\\[\\]\\s+cArray\\d*\\b");
         assertPatternAbsent(source, "\\bint\\s+n\\d*\\b");
         assertPatternAbsent(source, "catch\\s*\\([^)]*\\)\\s*\\{\\s*\\}");
+        assertNoEmptyCatchInProductionSources();
 
         System.out.println("SourceHygieneTest PASS");
+    }
+
+    private static void assertNoEmptyCatchInProductionSources() throws Exception {
+        try (var paths = Files.walk(SOURCE_ROOT)) {
+            for (Path path : paths.filter(candidate -> candidate.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(path, StandardCharsets.UTF_8);
+                if (Pattern.compile("catch\\s*\\([^)]*\\)\\s*\\{\\s*\\}").matcher(source).find()) {
+                    throw new AssertionError("生产源码存在空 catch: " + path);
+                }
+            }
+        }
     }
 
     private static void assertAbsent(String source, String forbiddenText) {

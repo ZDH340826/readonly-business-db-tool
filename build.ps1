@@ -92,6 +92,10 @@ if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code
 if ($LASTEXITCODE -ne 0) { throw "monitoring session race tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ErrorSanitizationTest
 if ($LASTEXITCODE -ne 0) { throw "error sanitization tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SensitiveDataSanitizationTest
+if ($LASTEXITCODE -ne 0) { throw "sensitive data sanitization tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ReadOnlyConnectionTest
+if ($LASTEXITCODE -ne 0) { throw "read-only connection tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ExecutorSeparationTest
 if ($LASTEXITCODE -ne 0) { throw "executor separation tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SystemHealthStatusTest
