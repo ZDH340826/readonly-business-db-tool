@@ -2,6 +2,27 @@
 
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
+## [0.5.0-rc.1] - 2026-07-14
+
+### Added
+
+- Eight real operational pages with a shared Swing theme, fixed application shell, semantic status badges, and responsive split layouts.
+- Structured read-only data query, current-page UTF-8 CSV export, metadata browser, and 100-row preview.
+- Sanitized diagnostic ZIP, offline field preflight, embedded-runtime launchers, and Chinese operations documents.
+- Named regression coverage for 27 field scenarios, Chinese/spaced Windows paths, configuration damage, and package scripts.
+
+### Changed
+
+- Query failures are an independent `QUERY_FAILED` state and never count as shortage, normal, or recovered business state.
+- Monitoring uses immutable `MonitoringSession` snapshots, generation gates, task-local password copies, and separate monitor/I/O executors.
+- Configuration readers safely fall back when Java properties syntax is damaged.
+
+### Security
+
+- PostgreSQL access remains parameterized and read-only; local H2 monitor connections are opened with database-level read-only access.
+- Passwords remain memory-only and are excluded from configuration, logs, diagnostics, documents, and release archives.
+- Diagnostics use an explicit six-entry allowlist and redact credentials, usernames, network identifiers, absolute paths, and stack/source locations.
+
 ## [0.4.0] - 2026-07-04
 
 ### Added

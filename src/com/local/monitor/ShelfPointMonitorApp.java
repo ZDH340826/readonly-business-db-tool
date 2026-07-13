@@ -79,7 +79,7 @@ import javax.swing.tree.DefaultTreeModel;
 public final class ShelfPointMonitorApp
 extends JFrame {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final String EXPECTED_SELF_TEST_VERSION = "0.4.0";
+    private static final String EXPECTED_SELF_TEST_VERSION = "0.5.0-rc.1";
     private static final Pattern PRIVATE_10_NET_PATTERN = Pattern.compile("\\b10(?:\\.\\d{1,3}){3}\\b");
     private static final Pattern REAL_POINT_CODE_PATTERN = Pattern.compile("\\b\\d{6}BB\\d{6}\\b");
     private static final String PAGE_OVERVIEW = "\u76d1\u63a7\u603b\u89c8";
@@ -381,8 +381,17 @@ extends JFrame {
         ShelfPointMonitorApp.requireFile(path2.resolve("ShelfPointMonitor.jar"), "packaged application jar");
         String text = Files.readString(ShelfPointMonitorApp.requireFile(path2.resolve("VERSION"), "VERSION"), StandardCharsets.UTF_8).trim();
         if (!EXPECTED_SELF_TEST_VERSION.equals(text)) {
-            throw new IllegalStateException("VERSION must be 0.4.0, actual=" + text);
+            throw new IllegalStateException("VERSION must be " + EXPECTED_SELF_TEST_VERSION + ", actual=" + text);
         }
+        ShelfPointMonitorApp.requireFile(path2.resolve("runtime/bin/java.exe"), "embedded Java runtime");
+        ShelfPointMonitorApp.requireFile(path2.resolve("启动工具.bat"), "application launcher");
+        ShelfPointMonitorApp.requireFile(path2.resolve("现场部署检查.bat"), "field preflight launcher");
+        ShelfPointMonitorApp.requireFile(path2.resolve("生成诊断包.bat"), "diagnostic launcher");
+        ShelfPointMonitorApp.requireFile(path2.resolve("现场运维交付手册.md"), "field operations manual");
+        ShelfPointMonitorApp.requireFile(path2.resolve("现场验收清单.md"), "field acceptance checklist");
+        ShelfPointMonitorApp.requireFile(path2.resolve("回滚说明.md"), "rollback guide");
+        ShelfPointMonitorApp.requireDirectory(path2.resolve("logs"), "logs directory");
+        ShelfPointMonitorApp.requireDirectory(path2.resolve("diagnostics"), "diagnostics directory");
         ShelfPointMonitorApp.requireFile(path2.resolve("lib/postgresql-42.2.25.jar"), "PostgreSQL JDBC driver");
         ShelfPointMonitorApp.requireFile(path2.resolve("lib/h2-2.2.224.jar"), "H2 JDBC driver");
         Class.forName("org.postgresql.Driver");

@@ -1,6 +1,6 @@
 # 只读业务数据库工具
 
-当前版本：`0.4.0`
+当前版本：`0.5.0-rc.1`
 
 这是一个 Windows 本地 Java Swing 只读数据库工具，用于只读查看业务数据库，并按区域/物料组监控点位缺料风险。它不是通用数据库客户端替代品，不提供 SQL 编辑器，不提供任何数据修改功能。
 
@@ -17,6 +17,8 @@
 - 报警确认：报警窗口必须手动点击“已关注”才会关闭。
 - 日志系统：记录每次检测快照和报警/确认/恢复事件。
 - 本地测试库：无需连接现场数据库即可验证界面、浏览器和报警逻辑。
+- 八页工作台：监控总览、点位组管理、报警中心、连接管理、数据查询、数据源浏览器、日志与系统、系统设置。
+- 现场交付：内嵌 Java 运行时、中文启动/预检/诊断脚本、脱敏诊断包和中文验收/回滚文档。
 
 ## 只读边界
 
@@ -43,13 +45,14 @@ SET TRANSACTION READ ONLY;
 
 ```powershell
 .\build.ps1
-.\dist\ShelfPointMonitor\ShelfPointMonitor.bat
+.\dist\ShelfPointMonitor\启动工具.bat
+.\dist\ShelfPointMonitor\现场部署检查.bat
 ```
 
 构建脚本会读取根目录 `VERSION`，生成版本化压缩包：
 
 ```text
-dist/ReadonlyBusinessDbTool-v0.4.0.zip
+dist/ReadonlyBusinessDbTool-v0.5.0-rc.1.zip
 ```
 
 ## 现场连接配置
@@ -108,8 +111,11 @@ dist/ReadonlyBusinessDbTool-v0.4.0.zip
 ## 文档
 
 - 使用说明书：[docs/manuals/point-shortage-alert-user-manual.md](docs/manuals/point-shortage-alert-user-manual.md)
+- 现场运维交付手册：[docs/manuals/现场运维交付手册.md](docs/manuals/现场运维交付手册.md)
+- 现场验收清单：[docs/ops/现场验收清单.md](docs/ops/现场验收清单.md)
+- 回滚说明：[docs/ops/回滚说明.md](docs/ops/回滚说明.md)
 - 版本策略：[docs/VERSIONING.md](docs/VERSIONING.md)
-- 发布说明：[docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)
+- 发布说明：[docs/releases/v0.5.0-rc.1.md](docs/releases/v0.5.0-rc.1.md)
 
 ## 版本
 

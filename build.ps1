@@ -141,6 +141,9 @@ Set-Content -Encoding ASCII -Path (Join-Path $dist 'VERSION') -Value $version
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
 Copy-Item -LiteralPath $driverJar -Destination (Join-Path $dist 'lib\postgresql-42.2.25.jar') -Force
 Copy-Item -LiteralPath $h2Jar -Destination (Join-Path $dist 'lib\h2-2.2.224.jar') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs\manuals\现场运维交付手册.md') -Destination (Join-Path $dist '现场运维交付手册.md') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs\ops\现场验收清单.md') -Destination (Join-Path $dist '现场验收清单.md') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs\ops\回滚说明.md') -Destination (Join-Path $dist '回滚说明.md') -Force
 
 if ($version -match '-rc' -and !$jlinkPath) {
     throw "RC packaging requires jlink so the field package has an embedded runtime."

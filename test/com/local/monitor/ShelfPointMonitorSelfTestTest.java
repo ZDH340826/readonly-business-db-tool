@@ -8,6 +8,7 @@ public final class ShelfPointMonitorSelfTestTest {
     public static void main(String[] args) throws Exception {
         packagedSelfTestValidatesReleaseLayout();
         missingVersionFailsSelfTest();
+        missingOperationsDocumentFailsSelfTest();
         System.out.println("ShelfPointMonitorSelfTestTest PASS");
     }
 
@@ -31,14 +32,34 @@ public final class ShelfPointMonitorSelfTestTest {
                 "missing VERSION should fail self-test");
     }
 
+    private static void missingOperationsDocumentFailsSelfTest() throws Exception {
+        Path root = Files.createTempDirectory("spm-self-test-missing-manual");
+        writeValidPackageLayout(root);
+        Files.delete(root.resolve("现场运维交付手册.md"));
+
+        TestSupport.assertThrows(IllegalStateException.class,
+                () -> ShelfPointMonitorApp.runSelfTestForTest(root),
+                "missing operations manual should fail self-test");
+    }
+
     private static void writeValidPackageLayout(Path root) throws Exception {
         Files.createDirectories(root.resolve("lib"));
         Files.createDirectories(root.resolve("data"));
-        Files.writeString(root.resolve("VERSION"), "0.4.0" + System.lineSeparator(), StandardCharsets.UTF_8);
+        Files.createDirectories(root.resolve("logs"));
+        Files.createDirectories(root.resolve("diagnostics"));
+        Files.createDirectories(root.resolve("runtime/bin"));
+        Files.writeString(root.resolve("VERSION"), "0.5.0-rc.1" + System.lineSeparator(), StandardCharsets.UTF_8);
         Files.writeString(root.resolve("ShelfPointMonitor.jar"), "test jar placeholder", StandardCharsets.UTF_8);
         Files.writeString(root.resolve("lib/postgresql-42.2.25.jar"), "test postgres jar placeholder",
                 StandardCharsets.UTF_8);
         Files.writeString(root.resolve("lib/h2-2.2.224.jar"), "test h2 jar placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("runtime/bin/java.exe"), "test runtime placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("启动工具.bat"), "test launcher placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("现场部署检查.bat"), "test preflight placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("生成诊断包.bat"), "test diagnostic placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("现场运维交付手册.md"), "test manual placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("现场验收清单.md"), "test checklist placeholder", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("回滚说明.md"), "test rollback placeholder", StandardCharsets.UTF_8);
 
         Files.writeString(root.resolve("data/config.properties"), String.join(System.lineSeparator(),
                 "host=__SITE_HOST__",
