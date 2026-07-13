@@ -7,6 +7,7 @@
 # Runtime state
 /logs/
 /data/
+/diagnostics/
 *.log
 *.mv.db
 *.trace.db
@@ -25,6 +26,7 @@ group-config.properties
 Thumbs.db
 .idea/
 .vscode/
+.obsidian/
 *.iml
 
 # Java artifacts

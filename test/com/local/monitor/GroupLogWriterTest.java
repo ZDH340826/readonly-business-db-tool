@@ -28,6 +28,7 @@ public final class GroupLogWriterTest {
         TestSupport.assertContains(rows.get(1), "2026-06-30T10:15", "check row should include timestamp");
         TestSupport.assertContains(rows.get(1), "\"group,001\"", "check row should escape comma");
         TestSupport.assertContains(rows.get(1), "ACTIVE_ALERT", "check row should include status");
+        assertSafe(rows.get(1), "check log row");
     }
 
     private static void writesEventLogWithHeaderOnlyOnce() throws Exception {
@@ -46,6 +47,8 @@ public final class GroupLogWriterTest {
                 "event log header should be stable");
         TestSupport.assertContains(rows.get(1), "ALERT_OPEN", "first event should be written");
         TestSupport.assertContains(rows.get(2), "RECOVERED", "second event should be appended");
+        assertSafe(rows.get(1), "first event log row");
+        assertSafe(rows.get(2), "second event log row");
     }
 
     private static GroupEvaluation evaluation(String groupId, GroupAlertStatus status) {
@@ -64,7 +67,14 @@ public final class GroupLogWriterTest {
                 300,
                 List.of(),
                 status == GroupAlertStatus.ACTIVE_ALERT,
-                "usePoint=USE_POINT_001, backupAvailable=2/4");
+                "查询失败 jdbc:postgresql://192.0.2.10:2345/cms_web?user=readonly_user&password=Secret-123");
+    }
+
+    private static void assertSafe(String text, String context) {
+        TestSupport.assertNotContains(text, "readonly_user", context + " must not contain database username");
+        TestSupport.assertNotContains(text, "Secret-123", context + " must not contain password");
+        TestSupport.assertNotContains(text, "192.0.2.10", context + " must not contain IP address");
+        TestSupport.assertNotContains(text, "jdbc:postgresql:", context + " must not contain JDBC URL");
     }
 
     private static final class TestSupport {
@@ -76,6 +86,12 @@ public final class GroupLogWriterTest {
 
         static void assertContains(String text, String needle, String message) {
             if (text == null || !text.contains(needle)) {
+                throw new AssertionError(message + " text=" + text + " needle=" + needle);
+            }
+        }
+
+        static void assertNotContains(String text, String needle, String message) {
+            if (text != null && text.contains(needle)) {
                 throw new AssertionError(message + " text=" + text + " needle=" + needle);
             }
         }

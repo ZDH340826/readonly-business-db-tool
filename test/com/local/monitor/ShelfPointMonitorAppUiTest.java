@@ -57,6 +57,7 @@ public final class ShelfPointMonitorAppUiTest {
         groupFetchFailureUpdatesSelectedDashboardWithChineseStatus();
         queryFailureClosesActiveDialogForSameGroupOnly();
         queryFailureDoesNotCloseDialogForOtherGroup();
+        stoppingMonitoringClosesOldDialogWithoutAcknowledging();
         queryFailureEventsAreDeduplicatedAndSanitized();
         recoveredFilterDoesNotShowNeverAlertedNormalGroup();
         alertCenterActionsUseGroupIdWhenNamesCollide();
@@ -397,7 +398,7 @@ public final class ShelfPointMonitorAppUiTest {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
             appRef[0] = app;
             PointGroupDefinition source = group("group-001", 600);
-            setField(app, "executor", executor);
+            setField(app, "monitorExecutor", executor);
             setField(app, "currentProfile", new ConnectionProfile(
                     "local",
                     "Local",
@@ -556,7 +557,7 @@ public final class ShelfPointMonitorAppUiTest {
 
             TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
                     "same group failure should be a query failure evaluation");
-            List<String> eventRows = Files.readAllLines(logDir.resolve("event-log.csv"));
+            List<String> eventRows = waitForLogRows(logDir.resolve("event-log.csv"), 2);
             String eventLog = String.join("\n", eventRows);
             TestSupport.assertContains(eventLog, "QUERY_FAILED", "query failure event should be written");
             TestSupport.assertNotContains(eventLog, "ACKNOWLEDGED",
@@ -603,6 +604,38 @@ public final class ShelfPointMonitorAppUiTest {
         }
     }
 
+    private static void stoppingMonitoringClosesOldDialogWithoutAcknowledging() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        Path logDir = Files.createTempDirectory("stop-monitoring-dialog-test");
+        PointGroupDefinition group = group("group-stop-dialog", 60);
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            appRef[0] = app;
+            setField(app, "groupLogWriter", new GroupLogWriter(logDir));
+            setField(app, "logPath", logDir.resolve("monitor.log"));
+            setField(app, "activeDialog", new JDialog(app, "old alert"));
+            setField(app, "activeDialogGroupId", group.id());
+            @SuppressWarnings("unchecked")
+            Map<String, GroupAlertStatus> statuses =
+                    (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+            statuses.put(group.id(), GroupAlertStatus.ACTIVE_ALERT);
+            invoke(app, "stopMonitoring", new Class<?>[0]);
+            TestSupport.assertEquals(null, fieldValue(app, "activeDialog", JDialog.class),
+                    "stopping monitoring must close the old alert dialog");
+            TestSupport.assertEquals("", fieldValue(app, "activeDialogGroupId", String.class),
+                    "stopping monitoring must clear the dialog ownership");
+            TestSupport.assertEquals(0, statuses.size(),
+                    "stopping monitoring must not replace the alert with an acknowledged state");
+        });
+        try {
+            TestSupport.assertFalse(Files.exists(logDir.resolve("event-log.csv")),
+                    "closing a dialog during stop must not append an acknowledgement event");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
     private static void queryFailureEventsAreDeduplicatedAndSanitized() throws Exception {
         ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
         Path logDir = Files.createTempDirectory("query-failure-log-test");
@@ -637,9 +670,9 @@ public final class ShelfPointMonitorAppUiTest {
                     "test",
                     ignored -> healthyRecords());
 
-            List<String> checkRows = Files.readAllLines(logDir.resolve("check-log.csv"));
-            List<String> eventRows = Files.readAllLines(logDir.resolve("event-log.csv"));
-            List<String> monitorRows = Files.readAllLines(logDir.resolve("monitor.log"));
+            List<String> checkRows = waitForLogRows(logDir.resolve("check-log.csv"), unsafeMessages.size() + 2);
+            List<String> eventRows = waitForLogRows(logDir.resolve("event-log.csv"), 3);
+            List<String> monitorRows = waitForLogRows(logDir.resolve("monitor.log"), unsafeMessages.size());
             TestSupport.assertEquals(unsafeMessages.size() + 2, checkRows.size(),
                     "each actual check should write one check row plus header");
             TestSupport.assertEquals(3, eventRows.size(),
@@ -1366,8 +1399,10 @@ public final class ShelfPointMonitorAppUiTest {
     }
 
     private static void shutdownExecutor(Object target) throws Exception {
-        ScheduledExecutorService executor = fieldValue(target, "executor", ScheduledExecutorService.class);
-        executor.shutdownNow();
+        ScheduledExecutorService monitorExecutor = fieldValue(target, "monitorExecutor", ScheduledExecutorService.class);
+        ScheduledExecutorService ioExecutor = fieldValue(target, "ioExecutor", ScheduledExecutorService.class);
+        monitorExecutor.shutdownNow();
+        ioExecutor.shutdownNow();
     }
 
     private static void assertNoTechnicalGroupText(String text, String context) {
@@ -1389,6 +1424,20 @@ public final class ShelfPointMonitorAppUiTest {
                 context + " must not contain full JDBC URL");
         TestSupport.assertNotContains(text, "PointRepository.java:24",
                 context + " must not contain stack trace location");
+    }
+
+    private static List<String> waitForLogRows(Path path, int minimumRows) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (Files.exists(path)) {
+                List<String> rows = Files.readAllLines(path);
+                if (rows.size() >= minimumRows) {
+                    return rows;
+                }
+            }
+            Thread.sleep(10L);
+        }
+        throw new AssertionError("timed out waiting for log rows: " + path.getFileName());
     }
 
     private static void collectVisibleTexts(Component component, Set<String> texts) {
