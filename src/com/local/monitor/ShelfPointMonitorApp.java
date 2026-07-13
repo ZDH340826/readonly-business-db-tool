@@ -125,6 +125,7 @@ extends JFrame {
     private final JComboBox<String> profileSslModeBox = new JComboBox<String>(new String[]{"disable", "prefer", "require"});
     private final JTextField profileLocalPathField = new JTextField(18);
     private final JPasswordField profilePasswordField = new JPasswordField(14);
+    private final StatusBadge profileTestStatusLabel = new StatusBadge();
     private final DefaultComboBoxModel<String> schemaModel = new DefaultComboBoxModel<>();
     private final JComboBox<String> schemaBox = new JComboBox<String>(this.schemaModel);
     private final DefaultMutableTreeNode dataSourceTreeRoot = new DefaultMutableTreeNode("\u6570\u636e\u6e90");
@@ -561,62 +562,34 @@ extends JFrame {
     }
 
     private JPanel buildConnectionPage() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createTitledBorder(PAGE_CONNECTIONS));
-        this.profileList.setSelectionMode(0);
-        this.profileList.addListSelectionListener(listSelectionEvent -> {
-            int index;
-            if (!listSelectionEvent.getValueIsAdjusting() && (index = this.profileList.getSelectedIndex()) >= 0 && index < this.profiles.size()) {
-                this.populateProfileForm(this.profiles.get(index));
-            }
-        });
-        JScrollPane jScrollPane = new JScrollPane(this.profileList);
-        jScrollPane.setPreferredSize(new Dimension(220, 260));
-        panel.add((Component)jScrollPane, "West");
-        JPanel panel2 = new JPanel(new GridBagLayout());
-        int index = 0;
-        this.addField(panel2, index, 0, "\u8fde\u63a5ID", this.profileIdField);
-        this.addField(panel2, index, 2, "\u8fde\u63a5\u540d\u79f0", this.profileNameField);
-        this.addField(panel2, index, 4, "\u6570\u636e\u5e93\u7c7b\u578b", this.profileDbTypeBox);
-        this.addField(panel2, ++index, 0, "\u670d\u52a1\u5668\u5730\u5740/IP", this.profileHostField);
-        this.addField(panel2, index, 2, "\u7aef\u53e3", this.profilePortSpinner);
-        this.addField(panel2, index, 4, "\u6570\u636e\u5e93\u540d", this.profileDatabaseField);
-        this.addField(panel2, ++index, 0, "\u6570\u636e\u5e93\u7a7a\u95f4/Schema", this.profileSchemaField);
-        this.addField(panel2, index, 2, "\u7528\u6237\u540d", this.profileUserField);
-        this.addField(panel2, index, 4, "SSL\u6a21\u5f0f", this.profileSslModeBox);
-        this.addField(panel2, ++index, 0, "\u672c\u5730\u6d4b\u8bd5\u5e93\u8def\u5f84", this.profileLocalPathField);
-        this.addField(panel2, index, 2, "\u5bc6\u7801", this.profilePasswordField);
-        JPanel panel3 = new JPanel(new FlowLayout(0, 8, 0));
-        JButton button = new JButton("\u65b0\u5efa\u8fde\u63a5");
-        JButton button2 = new JButton("\u4fdd\u5b58\u8fde\u63a5");
-        JButton button3 = new JButton("\u5220\u9664\u8fde\u63a5");
-        JButton button4 = new JButton("\u6d4b\u8bd5\u8fde\u63a5");
-        JButton button5 = new JButton("\u8bbe\u4e3a\u5f53\u524d\u8fde\u63a5");
-        panel3.add(button);
-        panel3.add(button2);
-        panel3.add(button3);
-        panel3.add(button4);
-        panel3.add(button5);
-        GridBagConstraints gridBagConstraints = this.gbc(0, ++index);
-        gridBagConstraints.gridwidth = 6;
-        gridBagConstraints.fill = 2;
-        gridBagConstraints.weightx = 1.0;
-        panel2.add((Component)panel3, gridBagConstraints);
-        button.addActionListener(actionEvent -> this.newProfileForm());
-        button2.addActionListener(actionEvent -> this.saveProfile());
-        button3.addActionListener(actionEvent -> this.deleteProfile());
-        button4.addActionListener(actionEvent -> this.testSelectedProfile());
-        button5.addActionListener(actionEvent -> this.useProfileWithoutTest());
-        this.profileDbTypeBox.addActionListener(actionEvent -> this.updateProfileTypeEnabled());
-        JPanel panel4 = new JPanel(new GridLayout(0, 1, 4, 4));
-        panel4.setBorder(BorderFactory.createTitledBorder("\u5b89\u5168\u8bf4\u660e"));
-        panel4.add(new JLabel("\u6570\u636e\u5e93\u8bbf\u95ee\u6a21\u5f0f\uff1a\u53ea\u8bfb"));
-        panel4.add(new JLabel("\u5bc6\u7801\u4ec5\u4fdd\u5b58\u5728\u5f53\u524d\u8fd0\u884c\u5185\u5b58\uff0c\u4e0d\u5199\u5165\u914d\u7f6e\u6587\u4ef6"));
-        panel4.add(new JLabel("\u73b0\u573a\u5fc5\u987b\u4f7f\u7528\u6570\u636e\u5e93\u53ea\u8bfb\u8d26\u53f7"));
-        panel4.add(new JLabel("\u4e0d\u5c55\u793a\u5b8c\u6574 JDBC URL\u3001\u5bc6\u7801\u6216\u5386\u53f2\u5bc6\u7801"));
-        panel.add((Component)panel2, "Center");
-        panel.add((Component)panel4, "East");
-        return panel;
+        ConnectionManagementPage.Components components = new ConnectionManagementPage.Components(
+                this.profileList,
+                this.profileIdField,
+                this.profileNameField,
+                this.profileDbTypeBox,
+                this.profileHostField,
+                this.profilePortSpinner,
+                this.profileDatabaseField,
+                this.profileSchemaField,
+                this.profileUserField,
+                this.profileSslModeBox,
+                this.profileLocalPathField,
+                this.profilePasswordField,
+                this.profileTestStatusLabel);
+        ConnectionManagementPage.Actions actions = new ConnectionManagementPage.Actions(
+                () -> {
+                    int selectedIndex = this.profileList.getSelectedIndex();
+                    if (selectedIndex >= 0 && selectedIndex < this.profiles.size()) {
+                        this.populateProfileForm(this.profiles.get(selectedIndex));
+                    }
+                },
+                this::updateProfileTypeEnabled,
+                this::newProfileForm,
+                this::saveProfile,
+                this::deleteProfile,
+                this::testSelectedProfile,
+                this::useProfileWithoutTest);
+        return new ConnectionManagementPage(components, actions);
     }
 
     private JPanel buildBrowserPage() {
@@ -745,97 +718,40 @@ extends JFrame {
     }
 
     private JPanel buildGroupManagementPage() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createTitledBorder(PAGE_GROUPS));
-        JPanel panel2 = new JPanel(new FlowLayout(0, 8, 0));
-        JButton button = new JButton("\u65b0\u589e\u7ec4");
-        JButton button2 = new JButton("\u5220\u9664\u7ec4");
-        JButton button3 = new JButton("\u65b0\u589e\u70b9\u4f4d");
-        JButton button4 = new JButton("\u5220\u9664\u70b9\u4f4d");
-        JButton button5 = new JButton("\u4fdd\u5b58\u914d\u7f6e");
-        JButton button6 = new JButton("\u653e\u5f03\u4fee\u6539");
-        JButton button7 = new JButton("\u9a8c\u8bc1\u914d\u7f6e");
-        panel2.add(button);
-        panel2.add(button2);
-        panel2.add(button3);
-        panel2.add(button4);
-        panel2.add(button5);
-        panel2.add(button6);
-        panel2.add(button7);
-        panel2.add(this.startButton);
-        panel2.add(this.stopButton);
-        panel2.add(this.checkButton);
-        panel.add((Component)panel2, "North");
-        this.groupList.setSelectionMode(0);
-        this.groupList.addListSelectionListener(listSelectionEvent -> {
-            if (!listSelectionEvent.getValueIsAdjusting()) {
-                this.populateSelectedGroup();
-            }
-        });
-        JScrollPane jScrollPane = new JScrollPane(this.groupList);
-        jScrollPane.setPreferredSize(new Dimension(240, 360));
-        JPanel panel3 = new JPanel(new BorderLayout(8, 8));
-        panel3.add((Component)this.buildGroupDetailForm(), "North");
-        this.groupPointTable.setRowHeight(26);
-        this.groupPointTable.getColumnModel().getColumn(0).setPreferredWidth(80);
-        this.groupPointTable.getColumnModel().getColumn(1).setPreferredWidth(160);
-        this.groupPointTable.getColumnModel().getColumn(2).setPreferredWidth(260);
-        this.groupPointTable.getColumnModel().getColumn(3).setPreferredWidth(60);
-        this.groupPointTable.getColumnModel().getColumn(0).setCellEditor(new DefaultCellEditor(new JComboBox<String>(new String[]{PointRole.USE.name(), PointRole.BACKUP.name()})));
-        JPanel panel4 = new JPanel(new BorderLayout(8, 8));
-        panel4.setBorder(BorderFactory.createTitledBorder("\u70b9\u4f4d\u914d\u7f6e"));
-        panel4.add((Component)new JScrollPane(this.groupPointTable), "Center");
-        JPanel panel5 = new JPanel(new BorderLayout(8, 8));
-        panel5.setBorder(BorderFactory.createTitledBorder("\u70b9\u4f4d\u72b6\u6001\u770b\u677f"));
-        this.groupSummaryLabel.setFont(this.groupSummaryLabel.getFont().deriveFont(1, 15.0f));
-        this.pointStatusPanel.setBackground(Color.WHITE);
-        this.pointStatusPanel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
-        panel5.add((Component)this.groupSummaryLabel, "North");
-        panel5.add((Component)new JScrollPane(this.pointStatusPanel), "Center");
-        this.groupRuntimeArea.setEditable(false);
-        this.groupRuntimeArea.setRows(4);
-        this.groupRuntimeArea.setFont(new Font("Monospaced", 0, 13));
-        panel5.add((Component)new JScrollPane(this.groupRuntimeArea), "South");
-        JSplitPane jSplitPane = new JSplitPane(0, panel5, panel4);
-        jSplitPane.setResizeWeight(0.65);
-        jSplitPane.setDividerLocation(360);
-        panel3.add((Component)jSplitPane, "Center");
-        JSplitPane jSplitPane2 = new JSplitPane(1, jScrollPane, panel3);
-        jSplitPane2.setDividerLocation(240);
-        panel.add((Component)jSplitPane2, "Center");
-        button.addActionListener(actionEvent -> this.addPointGroup());
-        button2.addActionListener(actionEvent -> this.removeSelectedGroup());
-        button3.addActionListener(actionEvent -> this.groupPointModel.addRow(new Object[]{PointRole.BACKUP.name(), "\u5907\u7528\u4f4d", "", Boolean.TRUE}));
-        button4.addActionListener(actionEvent -> this.removeSelectedGroupPointRows());
-        button5.addActionListener(actionEvent -> this.saveGroupConfig());
-        button6.addActionListener(actionEvent -> this.loadGroupConfig());
-        button7.addActionListener(actionEvent -> this.validateGroupConfigFromUi());
-        this.startButton.addActionListener(actionEvent -> this.startMonitoring());
-        this.stopButton.addActionListener(actionEvent -> this.stopMonitoring());
-        this.checkButton.addActionListener(actionEvent -> this.checkNow());
-        this.stopButton.setEnabled(false);
-        return panel;
-    }
-
-    private JPanel buildGroupDetailForm() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("\u57fa\u672c\u4fe1\u606f"));
-        int index = 0;
-        this.addField(panel, index, 0, "\u7ec4ID", this.groupIdField);
-        this.addField(panel, index, 2, "\u533a\u57df", this.groupAreaField);
-        this.addCheckBox(panel, index, 4, this.groupEnabledBox);
-        this.addField(panel, ++index, 0, "\u7ec4\u540d", this.groupNameField);
-        this.addField(panel, index, 2, "\u7269\u6599", this.groupMaterialField);
-        this.addCheckBox(panel, index, 4, this.ruleEnabledBox);
-        this.addField(panel, ++index, 0, "\u68c0\u6d4b\u5468\u671f(\u5206\u949f)", this.groupCheckIntervalMinutesSpinner);
-        this.addField(panel, index, 2, "\u62a5\u8b66\u6301\u7eed(\u5206\u949f)", this.durationMinutesSpinner);
-        this.addCheckBox(panel, index, 4, this.requireUseEmptyBox);
-        this.addField(panel, ++index, 0, "\u6700\u5c11\u5907\u7528\u4f4d\u6709\u6599", this.minBackupAvailableSpinner);
-        this.addCheckBox(panel, index, 2, this.backupThresholdParticipatesBox);
-        GridBagConstraints gridBagConstraints = this.gbc(4, index);
-        gridBagConstraints.fill = 2;
-        panel.add((Component)new JLabel("\u62a5\u8b66\u89c4\u5219"), gridBagConstraints);
-        return panel;
+        GroupManagementPage.Components components = new GroupManagementPage.Components(
+                this.groupList,
+                this.groupIdField,
+                this.groupAreaField,
+                this.groupNameField,
+                this.groupMaterialField,
+                this.groupEnabledBox,
+                this.ruleEnabledBox,
+                this.requireUseEmptyBox,
+                this.backupThresholdParticipatesBox,
+                this.minBackupAvailableSpinner,
+                this.durationMinutesSpinner,
+                this.groupCheckIntervalMinutesSpinner,
+                this.groupPointTable,
+                this.pointStatusPanel,
+                this.groupSummaryLabel,
+                this.groupRuntimeArea,
+                this.startButton,
+                this.stopButton,
+                this.checkButton);
+        GroupManagementPage.Actions actions = new GroupManagementPage.Actions(
+                this::populateSelectedGroup,
+                this::addPointGroup,
+                this::removeSelectedGroup,
+                () -> this.groupPointModel.addRow(new Object[]{
+                        PointRole.BACKUP.name(), "\u5907\u7528\u4f4d", "", Boolean.TRUE}),
+                this::removeSelectedGroupPointRows,
+                this::saveGroupConfig,
+                this::loadGroupConfig,
+                this::validateGroupConfigFromUi,
+                this::startMonitoring,
+                this::stopMonitoring,
+                this::checkNow);
+        return new GroupManagementPage(components, actions);
     }
 
     private JPanel buildAlertCenterPage() {
@@ -1073,6 +989,7 @@ extends JFrame {
         this.profileSslModeBox.setSelectedItem("disable");
         this.profileLocalPathField.setText("data/local-test-db");
         this.profilePasswordField.setText("");
+        this.profileTestStatusLabel.setStatus("尚未执行连接测试", AppTheme.MUTED);
         this.profileList.clearSelection();
         this.updateProfileTypeEnabled();
     }
@@ -1175,6 +1092,7 @@ extends JFrame {
             char[] passwordSnapshot = Arrays.copyOf(passwordChars, passwordChars.length);
             Arrays.fill(passwordChars, '\u0000');
             long operationGeneration = this.beginConnectionTestOperation();
+            this.profileTestStatusLabel.setStatus("正在测试连接", AppTheme.PRIMARY);
             this.runIoInBackground(() -> {
                 try {
                     String testResult = this.pointRepository.testConnection(connectionProfile.toDbConfig(10), passwordSnapshot);
@@ -1238,6 +1156,7 @@ extends JFrame {
                 return;
             }
             this.currentConnectionHealth = "\u4e0a\u6b21\u8fde\u63a5\u6d4b\u8bd5\u5931\u8d25";
+            this.profileTestStatusLabel.setStatus("测试失败：" + failureSummary, AppTheme.QUERY_FAILED);
             this.refreshSystemHealthStatus();
             this.appendStatus("\u6d4b\u8bd5\u8fde\u63a5\u5931\u8d25\uff1a" + failureSummary);
             this.showErrorSummary("\u6d4b\u8bd5\u8fde\u63a5\u5931\u8d25\uff1a" + failureSummary);
@@ -1273,6 +1192,9 @@ extends JFrame {
         Arrays.fill(this.currentPassword, '\u0000');
         this.currentPassword = password == null ? new char[0] : Arrays.copyOf(password, password.length);
         this.currentConnectionHealth = healthStatus;
+        this.profileTestStatusLabel.setStatus(
+                healthStatus,
+                healthStatus.contains("\u6d4b\u8bd5\u6210\u529f") ? AppTheme.SUCCESS : AppTheme.WARNING);
         this.updateCurrentConnectionLabel();
     }
 
