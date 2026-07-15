@@ -92,6 +92,8 @@ if ($LASTEXITCODE -ne 0) { throw "readable table tests failed with exit code $LA
 if ($LASTEXITCODE -ne 0) { throw "pinned column layout tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.TableColumnLayoutStoreTest
 if ($LASTEXITCODE -ne 0) { throw "table column layout store tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PinnedTablePaneTest
+if ($LASTEXITCODE -ne 0) { throw "pinned table pane tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppThemeTest
 if ($LASTEXITCODE -ne 0) { throw "app theme tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppShellTest
