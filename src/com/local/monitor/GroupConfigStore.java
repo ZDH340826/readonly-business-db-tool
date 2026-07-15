@@ -112,10 +112,10 @@ public final class GroupConfigStore {
                 }
                 if (point.enabled()) {
                     if (point.code() == null || point.code().isBlank()) {
-                        throw new IllegalArgumentException("启用点位编码不能为空：" + group.id());
+                        throw new IllegalArgumentException("启用地码不能为空：" + group.id());
                     }
                     if (!pointCodes.add(point.code())) {
-                        throw new IllegalArgumentException("同组点位编码不能重复：" + group.id() + " / " + point.code());
+                        throw new IllegalArgumentException("同组地码不能重复：" + group.id() + " / " + point.code());
                     }
                 }
             }

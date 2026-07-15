@@ -54,6 +54,7 @@ public final class ShelfPointMonitorAppUiTest {
         updateSelectedGroupFromFormPreservesCustomInterval();
         updateSelectedGroupFromFormSavesBackupThresholdParticipation();
         populateSelectedGroupRoundsPartialMinutesUp();
+        pointRolesUseChineseAndRoundTripMultipleUsePoints();
         renderPointStatusBoardShowsMaterialStates();
         renderPointStatusBoardDoesNotOverlapWhenBackupsPrecedeUse();
         capturedMonitoredGroupsIgnoreLaterFormChanges();
@@ -117,7 +118,7 @@ public final class ShelfPointMonitorAppUiTest {
                         "验证配置",
                         "活跃报警",
                         "数据库访问模式：只读",
-                        "点位编码关键字：",
+                        "地码关键字：",
                         "预览前100行",
                         "执行自检",
                         "保存设置"
@@ -455,6 +456,50 @@ public final class ShelfPointMonitorAppUiTest {
         });
     }
 
+    private static void pointRolesUseChineseAndRoundTripMultipleUsePoints() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition source = new PointGroupDefinition(
+                        "group-two-use",
+                        "A区",
+                        "双上料口",
+                        "示例物料",
+                        true,
+                        60,
+                        List.of(
+                                new GroupMonitorPoint("use-1", "USE_POINT_001", "使用位 1", PointRole.USE, true, 1),
+                                new GroupMonitorPoint("use-2", "USE_POINT_002", "使用位 2", PointRole.USE, true, 2),
+                                new GroupMonitorPoint("backup-1", "BACKUP_POINT_001", "备用位 1", PointRole.BACKUP, true, 3)),
+                        new GroupAlertRule(true, true, 1, 5, true));
+                setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+                invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+                invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+                javax.swing.table.DefaultTableModel model = fieldValue(
+                        app, "groupPointModel", javax.swing.table.DefaultTableModel.class);
+                TestSupport.assertEquals("使用位", model.getValueAt(0, 0),
+                        "role cells should use operator Chinese");
+                TestSupport.assertEquals("使用位", model.getValueAt(1, 0),
+                        "every use point should use operator Chinese");
+                TestSupport.assertEquals("备用位", model.getValueAt(2, 0),
+                        "backup role cells should use operator Chinese");
+
+                invoke(app, "updateSelectedGroupFromForm", new Class<?>[0]);
+
+                List<?> updatedGroups = fieldValue(app, "pointGroups", List.class);
+                PointGroupDefinition updated = (PointGroupDefinition) updatedGroups.get(0);
+                long useCount = updated.points().stream()
+                        .filter(point -> point.enabled() && point.role() == PointRole.USE)
+                        .count();
+                TestSupport.assertEquals(2L, useCount,
+                        "Chinese role cells should round-trip to two use point roles");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
     private static void renderPointStatusBoardShowsMaterialStates() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
@@ -475,6 +520,10 @@ public final class ShelfPointMonitorAppUiTest {
                         "point cards should use the agreed land-code term");
                 TestSupport.assertTrue(texts.contains("货码：SHELF_USE_001"),
                         "point cards should use the agreed cargo-code term");
+                TestSupport.assertTrue(texts.contains("使用位状态"),
+                        "status board should group use points visibly");
+                TestSupport.assertTrue(texts.contains("备用位状态"),
+                        "status board should group backup points visibly");
             } finally {
                 app.dispose();
             }
@@ -1191,7 +1240,7 @@ public final class ShelfPointMonitorAppUiTest {
                 JTable table = (JTable) component;
                 if (table.getColumnCount() == 4
                         && "角色".equals(table.getColumnName(0))
-                        && "点位编码".equals(table.getColumnName(2))) {
+                        && "地码".equals(table.getColumnName(2))) {
                     return true;
                 }
             }

@@ -55,21 +55,29 @@ public final class GroupConnectionPageTest {
                     "first area must contain two groups");
             JTable pointTable = findAll(page, JTable.class).get(0);
             assertEquals(32, pointTable.getRowHeight(), "group point table row height");
+            javax.swing.DefaultCellEditor roleEditor = (javax.swing.DefaultCellEditor)
+                    pointTable.getColumnModel().getColumn(0).getCellEditor();
+            JComboBox<?> roleOptions = (JComboBox<?>) roleEditor.getComponent();
+            assertEquals("使用位", roleOptions.getItemAt(0), "role editor should use operator Chinese");
+            assertEquals("备用位", roleOptions.getItemAt(1), "role editor should use operator Chinese");
+            List<String> labels = findAll(page, JLabel.class).stream().map(JLabel::getText).toList();
+            assertTrue(labels.contains("报警成立：任一使用位无料 + 备用位低于下限 + 持续达到时间"),
+                    "rule form should explain the full alarm condition");
         });
     }
 
     private static void groupPageBindsEveryRealConfigurationAction() throws Exception {
         runOnEdtAndWait(() -> {
-            int[] actions = new int[10];
+            int[] actions = new int[11];
             GroupManagementPage.Actions callbacks = new GroupManagementPage.Actions(
                     () -> { },
                     () -> actions[0]++, () -> actions[1]++, () -> actions[2]++, () -> actions[3]++,
-                    () -> actions[4]++, () -> actions[5]++, () -> actions[6]++,
-                    () -> actions[7]++, () -> actions[8]++, () -> actions[9]++);
+                    () -> actions[4]++, () -> actions[5]++, () -> actions[6]++, () -> actions[7]++,
+                    () -> actions[8]++, () -> actions[9]++, () -> actions[10]++);
             GroupManagementPage page = new GroupManagementPage(
                     groupComponents(new JList<>(new DefaultListModel<>())), callbacks);
             List<String> buttons = List.of(
-                    "新增组", "删除组", "新增点位", "删除点位", "保存配置", "放弃修改", "验证配置",
+                    "新增组", "删除组", "添加使用位", "添加备用位", "删除点位", "保存配置", "放弃修改", "验证配置",
                     "开始监控", "停止", "立即检测");
             for (int index = 0; index < buttons.size(); index++) {
                 AbstractButton button = findButton(page, buttons.get(index));
@@ -121,11 +129,11 @@ public final class GroupConnectionPageTest {
 
     private static GroupManagementPage.Components groupComponents(JList<String> groupList) {
         JTable table = new JTable(new DefaultTableModel(
-                new Object[] {"角色", "别名", "点位编码", "启用"}, 0));
+                new Object[] {"角色", "别名", "地码", "启用"}, 0));
         return new GroupManagementPage.Components(
                 groupList,
                 new JTextField(), new JTextField(), new JTextField(), new JTextField(),
-                new JCheckBox("启用"), new JCheckBox("启用规则"), new JCheckBox("使用位无货架"),
+                new JCheckBox("启用"), new JCheckBox("启用规则"), new JCheckBox("任一启用使用位无料"),
                 new JCheckBox("备用位下限参与报警"),
                 spinner(3), spinner(5), spinner(1),
                 table, new JPanel(), new JLabel("当前判断：未检测"), new JTextArea(),
@@ -136,7 +144,7 @@ public final class GroupConnectionPageTest {
     private static GroupManagementPage.Actions noOpGroupActions() {
         return new GroupManagementPage.Actions(
                 () -> { }, () -> { }, () -> { }, () -> { }, () -> { }, () -> { },
-                () -> { }, () -> { }, () -> { }, () -> { }, () -> { });
+                () -> { }, () -> { }, () -> { }, () -> { }, () -> { }, () -> { });
     }
 
     private static ConnectionManagementPage.Components connectionComponents() {

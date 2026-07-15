@@ -69,8 +69,8 @@ public final class DataQueryPage extends JPanel {
         container.setOpaque(false);
         JPanel form = new JPanel(new GridBagLayout());
         form.setOpaque(false);
-        addField(form, 0, 0, "点位编码关键字", components.pointKeyword());
-        addField(form, 0, 2, "货架编号关键字", components.shelfKeyword());
+        addField(form, 0, 0, "地码关键字", components.pointKeyword());
+        addField(form, 0, 2, "货码关键字", components.shelfKeyword());
         addField(form, 0, 4, "区域编码", components.areaCode());
         addField(form, 1, 0, "关联区域编码", components.relatedAreaCode());
         addField(form, 1, 2, "更新时间起", components.updatedFrom());

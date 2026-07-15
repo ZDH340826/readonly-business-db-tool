@@ -41,7 +41,7 @@ public final class DataPagesTest {
                             () -> { }, () -> { }));
             List<String> labels = findAll(page, JLabel.class).stream().map(JLabel::getText).toList();
             for (String field : List.of(
-                    "点位编码关键字：", "货架编号关键字：", "区域编码：", "关联区域编码：",
+                    "地码关键字：", "货码关键字：", "区域编码：", "关联区域编码：",
                     "更新时间起：", "更新时间止：", "每页行数：", "第 1 / 1 页", "总记录数：0")) {
                 assertTrue(labels.contains(field), "missing structured query field " + field);
             }

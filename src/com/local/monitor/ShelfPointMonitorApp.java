@@ -182,7 +182,7 @@ extends JFrame {
     private int queryCurrentPage = 1;
     private int queryTotalCount = 0;
     private PointDataQuery lastPointDataQuery;
-    private final DefaultTableModel dataQueryModel = new DefaultTableModel(new Object[]{"\u70b9\u4f4d\u7f16\u7801", "\u8d27\u67b6\u7f16\u53f7", "\u8d27\u67b6\u72b6\u6001", "\u72b6\u6001", "\u9501\u5b9a\u72b6\u6001", "\u533a\u57df\u7f16\u7801", "\u5173\u8054\u533a\u57df", "\u66f4\u65b0\u65f6\u95f4", "\u67e5\u8be2\u72b6\u6001"}, 0){
+    private final DefaultTableModel dataQueryModel = new DefaultTableModel(new Object[]{"\u5730\u7801", "\u8d27\u7801", "\u8d27\u67b6\u72b6\u6001", "\u72b6\u6001", "\u9501\u5b9a\u72b6\u6001", "\u533a\u57df\u7f16\u7801", "\u5173\u8054\u533a\u57df", "\u66f4\u65b0\u65f6\u95f4", "\u67e5\u8be2\u72b6\u6001"}, 0){
 
         @Override
         public boolean isCellEditable(int index, int index2) {
@@ -223,7 +223,7 @@ extends JFrame {
     private final JCheckBox settingsStartupSelfTestBox = new JCheckBox("\u542f\u52a8\u65f6\u6267\u884c\u81ea\u68c0");
     private final JCheckBox settingsAutoCleanupLogsBox = new JCheckBox("\u65e5\u5fd7\u81ea\u52a8\u6e05\u7406");
     private final JSpinner intervalSpinner = new JSpinner(new SpinnerNumberModel(10, 10, 86400, 10));
-    private final DefaultTableModel pointModel = new DefaultTableModel(new Object[]{"\u522b\u540d", "\u70b9\u4f4d\u7f16\u7801", "\u76d1\u6d4b\u5468\u671f(\u5206\u949f)"}, 0){
+    private final DefaultTableModel pointModel = new DefaultTableModel(new Object[]{"\u522b\u540d", "\u5730\u7801", "\u76d1\u6d4b\u5468\u671f(\u5206\u949f)"}, 0){
 
         @Override
         public Class<?> getColumnClass(int index) {
@@ -248,7 +248,7 @@ extends JFrame {
     private final JSpinner minBackupAvailableSpinner = new JSpinner(new SpinnerNumberModel(3, 0, 999, 1));
     private final JSpinner durationMinutesSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 1440, 1));
     private final JSpinner groupCheckIntervalMinutesSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1440, 1));
-    private final DefaultTableModel groupPointModel = new DefaultTableModel(new Object[]{"\u89d2\u8272", "\u522b\u540d", "\u70b9\u4f4d\u7f16\u7801", "\u542f\u7528"}, 0){
+    private final DefaultTableModel groupPointModel = new DefaultTableModel(new Object[]{"\u89d2\u8272", "\u522b\u540d", "\u5730\u7801", "\u542f\u7528"}, 0){
 
         @Override
         public Class<?> getColumnClass(int index) {
@@ -688,7 +688,9 @@ extends JFrame {
                 this::addPointGroup,
                 this::removeSelectedGroup,
                 () -> this.groupPointModel.addRow(new Object[]{
-                        PointRole.BACKUP.name(), "\u5907\u7528\u4f4d", "", Boolean.TRUE}),
+                        PointRoleDisplay.USE, "\u4f7f\u7528\u4f4d", "", Boolean.TRUE}),
+                () -> this.groupPointModel.addRow(new Object[]{
+                        PointRoleDisplay.BACKUP, "\u5907\u7528\u4f4d", "", Boolean.TRUE}),
                 this::removeSelectedGroupPointRows,
                 this::saveGroupConfig,
                 this::loadGroupConfig,
@@ -1250,7 +1252,7 @@ extends JFrame {
         this.groupCheckIntervalMinutesSpinner.setValue(Math.max(1, (pointGroupDefinition.checkIntervalSeconds() + 59) / 60));
         this.groupPointModel.setRowCount(0);
         for (GroupMonitorPoint groupMonitorPoint : pointGroupDefinition.points()) {
-            this.groupPointModel.addRow(new Object[]{groupMonitorPoint.role().name(), groupMonitorPoint.alias(), groupMonitorPoint.code(), groupMonitorPoint.enabled()});
+            this.groupPointModel.addRow(new Object[]{PointRoleDisplay.display(groupMonitorPoint.role()), groupMonitorPoint.alias(), groupMonitorPoint.code(), groupMonitorPoint.enabled()});
         }
         this.groupSummaryLabel.setText("\u5f53\u524d\u5224\u65ad\uff1a\u672a\u68c0\u6d4b");
         this.pointStatusPanel.removeAll();
@@ -1340,9 +1342,9 @@ extends JFrame {
             boolean flag = this.groupCellBoolean(i, 3);
             if (text.isEmpty() && text2.isEmpty() && text3.isEmpty()) continue;
             if (text.isEmpty() || text2.isEmpty() || text3.isEmpty()) {
-                throw new IllegalArgumentException("\u70b9\u4f4d\u89d2\u8272\u3001\u522b\u540d\u3001\u7f16\u7801\u5fc5\u987b\u540c\u65f6\u586b\u5199");
+                throw new IllegalArgumentException("\u70b9\u4f4d\u89d2\u8272\u3001\u522b\u540d\u3001\u5730\u7801\u5fc5\u987b\u540c\u65f6\u586b\u5199");
             }
-            arrayList.add(new GroupMonitorPoint(this.groupIdField.getText().trim() + "-point-" + (i + 1), text3, text2, PointRole.valueOf(text), flag, i + 1));
+            arrayList.add(new GroupMonitorPoint(this.groupIdField.getText().trim() + "-point-" + (i + 1), text3, text2, PointRoleDisplay.parse(text), flag, i + 1));
         }
         return arrayList;
     }
@@ -1721,42 +1723,70 @@ extends JFrame {
             this.pointStatusPanel.repaint();
             return;
         }
-        ArrayList<PointStatusView> arrayList = new ArrayList<PointStatusView>();
-        ArrayList<PointStatusView> arrayList2 = new ArrayList<PointStatusView>();
-        for (PointStatusView value : groupEvaluation.pointStatuses()) {
-            if (value.role() == PointRole.USE) {
-                arrayList.add(value);
+        ArrayList<PointStatusView> usePoints = new ArrayList<PointStatusView>();
+        ArrayList<PointStatusView> backupPoints = new ArrayList<PointStatusView>();
+        for (PointStatusView point : groupEvaluation.pointStatuses()) {
+            if (point.role() == PointRole.USE) {
+                usePoints.add(point);
                 continue;
             }
-            arrayList2.add(value);
+            backupPoints.add(point);
         }
-        int index = 0;
-        for (Object value : arrayList) {
-            Object value2 = this.pointStatusCard((PointStatusView)value);
+        int row = 0;
+        if (!usePoints.isEmpty()) {
             gridBagConstraints.gridx = 0;
-            gridBagConstraints.gridy = index++;
+            gridBagConstraints.gridy = row++;
             gridBagConstraints.gridwidth = 4;
-            this.pointStatusPanel.add((Component)value2, gridBagConstraints);
+            this.pointStatusPanel.add(this.pointStatusSection("使用位状态", "任一使用位无料都会满足使用位条件"), gridBagConstraints);
+            for (PointStatusView usePoint : usePoints) {
+                gridBagConstraints.gridx = 0;
+                gridBagConstraints.gridy = row++;
+                gridBagConstraints.gridwidth = 4;
+                this.pointStatusPanel.add(this.pointStatusCard(usePoint), gridBagConstraints);
+            }
         }
-        gridBagConstraints.gridwidth = 1;
-        boolean flag = false;
-        int index2 = 0;
-        for (Object value2 : arrayList2) {
-            JPanel panel = this.pointStatusCard((PointStatusView)value2);
-            gridBagConstraints.gridx = index2++;
-            gridBagConstraints.gridy = index++;
-            this.pointStatusPanel.add((Component)panel, gridBagConstraints);
-            if (index2 < 4) continue;
-            index2 = 0;
+        if (!backupPoints.isEmpty()) {
+            gridBagConstraints.gridx = 0;
+            gridBagConstraints.gridy = row++;
+            gridBagConstraints.gridwidth = 4;
+            this.pointStatusPanel.add(this.pointStatusSection("备用位状态", "有料数量低于设定下限时满足备用位条件"), gridBagConstraints);
+            for (int index = 0; index < backupPoints.size(); index++) {
+                gridBagConstraints.gridx = index % 2 * 2;
+                gridBagConstraints.gridy = row + index / 2;
+                gridBagConstraints.gridwidth = 2;
+                this.pointStatusPanel.add(this.pointStatusCard(backupPoints.get(index)), gridBagConstraints);
+            }
+            row += (backupPoints.size() + 1) / 2;
         }
+        JPanel filler = new JPanel();
+        filler.setOpaque(false);
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = row;
+        gridBagConstraints.gridwidth = 4;
+        gridBagConstraints.weighty = 1.0;
+        this.pointStatusPanel.add(filler, gridBagConstraints);
         this.pointStatusPanel.revalidate();
         this.pointStatusPanel.repaint();
+    }
+
+    private JPanel pointStatusSection(String title, String explanation) {
+        JPanel section = new JPanel(new BorderLayout(8, 0));
+        section.setOpaque(false);
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
+        titleLabel.setForeground(AppTheme.TEXT_PRIMARY);
+        JLabel explanationLabel = new JLabel(explanation);
+        explanationLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        explanationLabel.setForeground(AppTheme.TEXT_SECONDARY);
+        section.add(titleLabel, BorderLayout.WEST);
+        section.add(explanationLabel, BorderLayout.CENTER);
+        return section;
     }
 
     private JPanel pointStatusCard(PointStatusView pointStatusView) {
         JPanel panel = new JPanel(new GridLayout(0, 1, 4, 4));
         Color color = this.statusColor(pointStatusView.status());
-        panel.setBackground(Color.WHITE);
+        panel.setBackground(this.statusBackground(pointStatusView.status()));
         panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(color, 2), BorderFactory.createEmptyBorder(10, 10, 10, 10)));
         JLabel label = new JLabel((pointStatusView.role() == PointRole.USE ? "\u4f7f\u7528\u4f4d\uff1a" : "\u5907\u7528\u4f4d\uff1a") + pointStatusView.alias());
         label.setFont(new Font("SansSerif", 1, pointStatusView.role() == PointRole.USE ? 16 : 14));
@@ -1784,6 +1814,19 @@ extends JFrame {
             return new Color(112, 112, 112);
         }
         return new Color(150, 150, 150);
+    }
+
+    private Color statusBackground(PointMaterialStatus pointMaterialStatus) {
+        if (pointMaterialStatus == PointMaterialStatus.AVAILABLE) {
+            return new Color(242, 250, 246);
+        }
+        if (pointMaterialStatus == PointMaterialStatus.EMPTY) {
+            return new Color(255, 245, 245);
+        }
+        if (pointMaterialStatus == PointMaterialStatus.MISSING) {
+            return new Color(247, 247, 247);
+        }
+        return new Color(250, 250, 250);
     }
 
     private String formatGroupCheckResult(String text, List<PointRecord> list, GroupEvaluation groupEvaluation) {

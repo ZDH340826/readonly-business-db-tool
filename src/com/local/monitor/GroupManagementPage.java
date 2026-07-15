@@ -60,8 +60,6 @@ public final class GroupManagementPage extends JPanel {
         actionsPanel.setOpaque(false);
         actionsPanel.add(action(UiFactory.primaryButton("新增组"), actions.addGroup()));
         actionsPanel.add(action(UiFactory.dangerButton("删除组"), actions.removeGroup()));
-        actionsPanel.add(action(UiFactory.secondaryButton("新增点位"), actions.addPoint()));
-        actionsPanel.add(action(UiFactory.secondaryButton("删除点位"), actions.removePoint()));
         actionsPanel.add(action(UiFactory.primaryButton("保存配置"), actions.save()));
         actionsPanel.add(action(UiFactory.secondaryButton("放弃修改"), actions.discard()));
         actionsPanel.add(action(UiFactory.secondaryButton("验证配置"), actions.validate()));
@@ -104,10 +102,19 @@ public final class GroupManagementPage extends JPanel {
         upper.setDividerLocation(240);
 
         configurePointTable();
+        JPanel pointConfiguration = new JPanel(new BorderLayout(0, 8));
+        pointConfiguration.setOpaque(false);
+        pointConfiguration.add(UiFactory.tableScrollPane(components.pointTable()), BorderLayout.CENTER);
+        JPanel pointActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        pointActions.setOpaque(false);
+        pointActions.add(action(UiFactory.secondaryButton("添加使用位"), actions.addUsePoint()));
+        pointActions.add(action(UiFactory.secondaryButton("添加备用位"), actions.addBackupPoint()));
+        pointActions.add(action(UiFactory.dangerButton("删除点位"), actions.removePoint()));
+        pointConfiguration.add(pointActions, BorderLayout.SOUTH);
         SectionCard pointTableCard = new SectionCard(
                 "点位配置表",
-                "角色、别名、点位编码和启用状态",
-                UiFactory.tableScrollPane(components.pointTable()));
+                "先选角色，再填写别名和地码；一个组可有多个使用位",
+                pointConfiguration);
         SectionCard runtimeCard = new SectionCard(
                 "点位状态看板",
                 "最近一次检测的真实状态与运行摘要",
@@ -144,7 +151,14 @@ public final class GroupManagementPage extends JPanel {
         addCheckBox(form, 2, components.backupThresholdParticipates());
         addField(form, 3, "最少备用位有料", components.minBackupAvailable());
         addField(form, 4, "报警持续(分钟)", components.durationMinutes());
-        addVerticalFiller(form, 5);
+        JLabel explanation = new JLabel("报警成立：任一使用位无料 + 备用位低于下限 + 持续达到时间");
+        explanation.setForeground(AppTheme.TEXT_SECONDARY);
+        explanation.setFont(AppTheme.font(Font.PLAIN, 12f));
+        GridBagConstraints explanationConstraints = constraints(0, 5);
+        explanationConstraints.gridwidth = 2;
+        explanationConstraints.anchor = GridBagConstraints.LINE_START;
+        form.add(explanation, explanationConstraints);
+        addVerticalFiller(form, 6);
         return form;
     }
 
@@ -173,7 +187,7 @@ public final class GroupManagementPage extends JPanel {
             table.getColumnModel().getColumn(2).setPreferredWidth(260);
             table.getColumnModel().getColumn(3).setPreferredWidth(60);
             table.getColumnModel().getColumn(0).setCellEditor(new DefaultCellEditor(
-                    new JComboBox<>(new String[] {PointRole.USE.name(), PointRole.BACKUP.name()})));
+                    new JComboBox<>(PointRoleDisplay.options())));
         }
     }
 
@@ -361,7 +375,8 @@ public final class GroupManagementPage extends JPanel {
             Runnable selectionChanged,
             Runnable addGroup,
             Runnable removeGroup,
-            Runnable addPoint,
+            Runnable addUsePoint,
+            Runnable addBackupPoint,
             Runnable removePoint,
             Runnable save,
             Runnable discard,
