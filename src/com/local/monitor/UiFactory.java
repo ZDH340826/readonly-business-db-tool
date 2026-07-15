@@ -47,6 +47,7 @@ public final class UiFactory {
         table.getTableHeader().setForeground(AppTheme.TEXT_SECONDARY);
         table.getTableHeader().setFont(AppTheme.font(Font.BOLD, 13f));
         table.getTableHeader().setPreferredSize(new Dimension(0, 36));
+        ReadableTableColumns.install(table);
     }
 
     public static void configureStatusColumn(JTable table, int modelColumn) {
