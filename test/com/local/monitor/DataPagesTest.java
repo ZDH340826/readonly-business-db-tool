@@ -26,6 +26,7 @@ public final class DataPagesTest {
         queryPageHasStructuredConditionsPaginationExportAndNoSqlEditor();
         queryConditionEditResetsPaginationState();
         browserPageHasThreeFinalColumnsAndRealActions();
+        browserPreviewHasEnoughSpaceForTheImportantColumnPreset();
         System.out.println("DataPagesTest PASS");
     }
 
@@ -107,6 +108,34 @@ public final class DataPagesTest {
         });
     }
 
+    private static void browserPreviewHasEnoughSpaceForTheImportantColumnPreset() throws Exception {
+        runOnEdtAndWait(() -> {
+            DataSourceBrowserPage.Components components = browserComponents();
+            DefaultTableModel previewModel = new DefaultTableModel(
+                    new Object[] {"map_data_code", "pod_code", "pod_status", "status", "date_chg"},
+                    0);
+            previewModel.addRow(new Object[] {
+                    "USE_POINT_001", "SHELF_BACKUP_001", "0", "1", "2026-07-16 10:00:00"
+            });
+            components.previewTable().setModel(previewModel);
+            DataSourceBrowserPage page = new DataSourceBrowserPage(
+                    components,
+                    new DataSourceBrowserPage.Actions(() -> { }, () -> { }, () -> { }, () -> { }),
+                    new TableColumnLayoutStore(Files.createTempDirectory("browser-preview-width")
+                            .resolve("table-column-layout.properties")));
+            page.setSize(1184, 700);
+            layoutTree(page);
+            layoutTree(page);
+            page.previewLoaded("public", "tcs_map_data");
+            PinnedTablePane previewPane = findAll(page, PinnedTablePane.class).get(0);
+            previewPane.applyPinnedColumns(List.of("map_data_code", "pod_code"));
+            assertEquals(
+                    List.of("map_data_code", "pod_code"),
+                    previewPane.pinnedColumns(),
+                    "normal 1440-wide layout must allow the one-click important-column preset");
+        });
+    }
+
     private static DataQueryPage.Components queryComponents() {
         return new DataQueryPage.Components(
                 new JTextField(), new JTextField(), new JTextField(), new JTextField(),
@@ -163,6 +192,15 @@ public final class DataPagesTest {
         if (component instanceof java.awt.Container container) {
             for (Component child : container.getComponents()) {
                 collect(child, type, values);
+            }
+        }
+    }
+
+    private static void layoutTree(Component component) {
+        if (component instanceof java.awt.Container container) {
+            container.doLayout();
+            for (Component child : container.getComponents()) {
+                layoutTree(child);
             }
         }
     }

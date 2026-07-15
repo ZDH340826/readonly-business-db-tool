@@ -1,8 +1,9 @@
 package com.local.monitor;
 
-import java.nio.file.Files;
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractButton;
@@ -183,6 +184,11 @@ public final class PinnedTablePaneTest {
                     "configuration must stay disabled before a table is previewed");
             TestSupport.assertTrue(!restore.isEnabled(),
                     "restore must stay disabled while no columns are fixed");
+            Component toolbar = ((BorderLayout) pane.getLayout())
+                    .getLayoutComponent(BorderLayout.NORTH);
+            TestSupport.assertTrue(
+                    toolbar.getPreferredSize().height > configure.getPreferredSize().height + 20,
+                    "narrow preview must reserve a separate visible row for the action buttons");
 
             pane.setSize(900, 500);
             pane.showTable("public", "tcs_map_data");

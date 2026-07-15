@@ -97,12 +97,12 @@ public final class DataSourceBrowserPage extends JPanel {
 
         JSplitPane centerAndRight = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, center, right);
         centerAndRight.setBorder(BorderFactory.createEmptyBorder());
-        centerAndRight.setResizeWeight(0.50);
-        centerAndRight.setDividerLocation(470);
+        centerAndRight.setResizeWeight(0.25);
+        centerAndRight.setDividerLocation(210);
         JSplitPane all = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, centerAndRight);
         all.setBorder(BorderFactory.createEmptyBorder());
-        all.setResizeWeight(0.28);
-        all.setDividerLocation(340);
+        all.setResizeWeight(0.21);
+        all.setDividerLocation(240);
         all.setContinuousLayout(true);
         return all;
     }

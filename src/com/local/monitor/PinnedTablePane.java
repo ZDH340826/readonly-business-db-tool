@@ -107,11 +107,15 @@ public final class PinnedTablePane extends javax.swing.JPanel {
     }
 
     private JPanel buildToolbar() {
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        JPanel toolbar = new JPanel(new BorderLayout(0, 4));
         toolbar.setOpaque(false);
-        toolbar.add(new JLabel("左右滚动查看全部列；常用列可固定在左侧"));
-        toolbar.add(configureButton);
-        toolbar.add(restoreButton);
+        toolbar.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        toolbar.add(new JLabel("左右滚动查看全部列；常用列可固定在左侧"), BorderLayout.NORTH);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actions.setOpaque(false);
+        actions.add(configureButton);
+        actions.add(restoreButton);
+        toolbar.add(actions, BorderLayout.SOUTH);
         return toolbar;
     }
 
