@@ -312,12 +312,7 @@ public final class GroupManagementPage extends JPanel {
     }
 
     private static void styleMonitorButton(JButton button, java.awt.Color background, java.awt.Color foreground) {
-        button.setFont(AppTheme.font(Font.BOLD, 14f));
-        button.setBackground(background);
-        button.setForeground(foreground);
-        button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createEmptyBorder(8, 14, 8, 14));
-        button.setOpaque(true);
+        UiFactory.styleActionButton(button, background, foreground, background);
     }
 
     private static String textBefore(String value, String delimiter, String fallback) {

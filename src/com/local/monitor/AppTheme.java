@@ -74,7 +74,7 @@ public final class AppTheme {
         UIManager.put("TextField.background", INPUT_BACKGROUND);
         UIManager.put("PasswordField.background", INPUT_BACKGROUND);
         UIManager.put("ComboBox.background", INPUT_BACKGROUND);
-        UIManager.put("Button.disabledText", MUTED);
+        UIManager.put("Button.disabledText", TEXT_SECONDARY);
         UIManager.put("ScrollPane.border", BorderFactory.createLineBorder(BORDER));
     }
 

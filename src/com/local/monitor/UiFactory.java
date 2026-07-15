@@ -9,6 +9,7 @@ import javax.swing.JButton;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.JLabel;
+import javax.swing.plaf.basic.BasicButtonUI;
 import javax.swing.table.DefaultTableCellRenderer;
 
 public final class UiFactory {
@@ -16,15 +17,16 @@ public final class UiFactory {
     }
 
     public static JButton primaryButton(String text) {
-        return button(text, AppTheme.PRIMARY, Color.WHITE, AppTheme.PRIMARY);
+        return styleActionButton(new JButton(text), AppTheme.PRIMARY, Color.WHITE, AppTheme.PRIMARY);
     }
 
     public static JButton secondaryButton(String text) {
-        return button(text, AppTheme.CARD_BACKGROUND, AppTheme.TEXT_PRIMARY, AppTheme.BORDER);
+        return styleActionButton(
+                new JButton(text), AppTheme.CARD_BACKGROUND, AppTheme.TEXT_PRIMARY, AppTheme.BORDER);
     }
 
     public static JButton dangerButton(String text) {
-        return button(text, AppTheme.DANGER, Color.WHITE, AppTheme.DANGER);
+        return styleActionButton(new JButton(text), AppTheme.DANGER, Color.WHITE, AppTheme.DANGER);
     }
 
     public static void configureTable(JTable table) {
@@ -54,19 +56,43 @@ public final class UiFactory {
         table.getColumnModel().getColumn(modelColumn).setCellRenderer(new SemanticStatusRenderer());
     }
 
-    private static JButton button(String text, Color background, Color foreground, Color border) {
-        JButton button = new JButton(text);
+    static JButton styleActionButton(
+            JButton button,
+            Color enabledBackground,
+            Color enabledForeground,
+            Color enabledBorder) {
+        button.setUI(new BasicButtonUI());
         button.setFont(AppTheme.font(Font.BOLD, 14f));
+        button.setFocusPainted(false);
+        button.setContentAreaFilled(true);
+        button.setOpaque(true);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.addPropertyChangeListener("enabled", event -> applyButtonState(
+                button,
+                enabledBackground,
+                enabledForeground,
+                enabledBorder));
+        applyButtonState(button, enabledBackground, enabledForeground, enabledBorder);
+        return button;
+    }
+
+    private static void applyButtonState(
+            JButton button,
+            Color enabledBackground,
+            Color enabledForeground,
+            Color enabledBorder) {
+        Color background = button.isEnabled()
+                ? enabledBackground
+                : AppTheme.softBackground(AppTheme.MUTED);
+        Color foreground = button.isEnabled()
+                ? enabledForeground
+                : AppTheme.TEXT_SECONDARY;
+        Color border = button.isEnabled() ? enabledBorder : AppTheme.MUTED;
         button.setForeground(foreground);
         button.setBackground(background);
         button.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(border),
                 BorderFactory.createEmptyBorder(7, 14, 7, 14)));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(true);
-        button.setOpaque(true);
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        return button;
     }
 
     private static final class SemanticStatusRenderer extends DefaultTableCellRenderer {

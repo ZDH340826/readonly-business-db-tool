@@ -1,7 +1,9 @@
 package com.local.monitor;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics2D;
 import java.io.IOException;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -11,6 +13,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -32,6 +35,7 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JTable;
+import javax.swing.UIManager;
 import javax.swing.text.JTextComponent;
 import javax.swing.SwingUtilities;
 import javax.swing.border.TitledBorder;
@@ -63,6 +67,7 @@ public final class ShelfPointMonitorAppUiTest {
         alertCenterActionsUseGroupIdWhenNamesCollide();
         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
         gridBagPanelsDoNotOverlapCells();
+        buttonsPaintReadableColorsAcrossEveryPage();
         groupStatusTextUsesOperatorChinese();
         groupSummaryDoesNotExposeTechnicalFields();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
@@ -171,6 +176,76 @@ public final class ShelfPointMonitorAppUiTest {
                 app.dispose();
             }
         });
+    }
+
+    private static void buttonsPaintReadableColorsAcrossEveryPage() throws Exception {
+        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        AppTheme.install();
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                TestSupport.assertTrue(navigation != null, "button audit requires the final navigation list");
+                for (int page = 0; page < navigation.getModel().getSize(); page++) {
+                    navigation.setSelectedIndex(page);
+                    List<JButton> buttons = new ArrayList<>();
+                    collectVisibleButtons(app.getContentPane(), buttons);
+                    String pageName = String.valueOf(navigation.getModel().getElementAt(page));
+                    TestSupport.assertTrue(!buttons.isEmpty(), pageName + " should expose at least one action button");
+                    for (JButton button : buttons) {
+                        assertButtonPaintsReadableColors(button, pageName);
+                    }
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void assertButtonPaintsReadableColors(JButton button, String pageName) {
+        String text = button.getText();
+        TestSupport.assertTrue(text != null && !text.isBlank(), pageName + " contains an unlabeled button");
+        int width = Math.max(80, button.getPreferredSize().width);
+        int height = Math.max(36, button.getPreferredSize().height);
+        button.setSize(width, height);
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            button.paint(graphics);
+        } finally {
+            graphics.dispose();
+        }
+        Color paintedBackground = new Color(image.getRGB(Math.max(2, width - 8), height / 2), true);
+        Color configuredBackground = button.getBackground();
+        int paintDifference = Math.abs(paintedBackground.getRed() - configuredBackground.getRed())
+                + Math.abs(paintedBackground.getGreen() - configuredBackground.getGreen())
+                + Math.abs(paintedBackground.getBlue() - configuredBackground.getBlue());
+        TestSupport.assertTrue(paintDifference <= 30,
+                pageName + " / " + text + " should paint its configured background; configured="
+                        + configuredBackground + " painted=" + paintedBackground);
+
+        Color textColor = button.isEnabled() ? button.getForeground() : UIManager.getColor("Button.disabledText");
+        TestSupport.assertTrue(textColor != null, pageName + " / " + text + " must define a text color");
+        double contrast = contrastRatio(textColor, configuredBackground);
+        TestSupport.assertTrue(contrast >= 4.5d,
+                pageName + " / " + text + " text must remain readable; contrast=" + contrast);
+    }
+
+    private static double contrastRatio(Color first, Color second) {
+        double light = Math.max(relativeLuminance(first), relativeLuminance(second));
+        double dark = Math.min(relativeLuminance(first), relativeLuminance(second));
+        return (light + 0.05d) / (dark + 0.05d);
+    }
+
+    private static double relativeLuminance(Color color) {
+        double red = linearColor(color.getRed() / 255.0d);
+        double green = linearColor(color.getGreen() / 255.0d);
+        double blue = linearColor(color.getBlue() / 255.0d);
+        return 0.2126d * red + 0.7152d * green + 0.0722d * blue;
+    }
+
+    private static double linearColor(double value) {
+        return value <= 0.04045d ? value / 12.92d : Math.pow((value + 0.055d) / 1.055d, 2.4d);
     }
 
     private static void connectionPageUsesChineseOperatorLabels() throws Exception {
@@ -1455,6 +1530,23 @@ public final class ShelfPointMonitorAppUiTest {
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
                 collectVisibleTexts(child, texts);
+            }
+        }
+    }
+
+    private static void collectVisibleButtons(Component component, List<JButton> buttons) {
+        if (!component.isVisible()) {
+            return;
+        }
+        if (component instanceof JButton) {
+            JButton button = (JButton) component;
+            if (button.getText() != null && !button.getText().isBlank()) {
+                buttons.add(button);
+            }
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                collectVisibleButtons(child, buttons);
             }
         }
     }
