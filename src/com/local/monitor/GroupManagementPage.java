@@ -107,7 +107,7 @@ public final class GroupManagementPage extends JPanel {
         SectionCard pointTableCard = new SectionCard(
                 "点位配置表",
                 "角色、别名、点位编码和启用状态",
-                new JScrollPane(components.pointTable()));
+                UiFactory.tableScrollPane(components.pointTable()));
         SectionCard runtimeCard = new SectionCard(
                 "点位状态看板",
                 "最近一次检测的真实状态与运行摘要",

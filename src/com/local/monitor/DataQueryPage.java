@@ -51,7 +51,7 @@ public final class DataQueryPage extends JPanel {
         SectionCard tableCard = new SectionCard(
                 "查询结果",
                 "仅显示当前页；可导出当前内存结果",
-                new JScrollPane(components.resultTable()));
+                UiFactory.tableScrollPane(components.resultTable()));
         SectionCard detailCard = new SectionCard(
                 "记录详情与安全边界",
                 "无自由表名、字段名、排序表达式或 SQL 编辑器",

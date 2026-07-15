@@ -79,7 +79,7 @@ public final class LogsSystemPage extends JPanel {
         JPanel tableContent = new JPanel(new BorderLayout(0, 8));
         tableContent.setOpaque(false);
         tableContent.add(limits, BorderLayout.NORTH);
-        tableContent.add(new JScrollPane(components.logTable()), BorderLayout.CENTER);
+        tableContent.add(UiFactory.tableScrollPane(components.logTable()), BorderLayout.CENTER);
         SectionCard tableCard = new SectionCard("日志筛选结果", "所有显示内容均经过脱敏", tableContent);
         SectionCard detailCard = new SectionCard("事件详情", "选中记录的字段明细", new JScrollPane(components.detailArea()));
         JSplitPane eventSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, tableCard, detailCard);

@@ -59,7 +59,7 @@ public final class DataSourceBrowserPage extends JPanel {
         JSplitPane treeAndObjects = new JSplitPane(
                 JSplitPane.VERTICAL_SPLIT,
                 new JScrollPane(components.objectTree()),
-                new JScrollPane(components.objectTable()));
+                UiFactory.tableScrollPane(components.objectTable()));
         treeAndObjects.setBorder(BorderFactory.createEmptyBorder());
         treeAndObjects.setResizeWeight(0.45);
         treeAndObjects.setDividerLocation(220);
@@ -70,11 +70,11 @@ public final class DataSourceBrowserPage extends JPanel {
         SectionCard center = new SectionCard(
                 "对象元数据与列信息",
                 "列名、类型、长度、可空性和默认值",
-                new JScrollPane(components.columnTable()));
+                UiFactory.tableScrollPane(components.columnTable()));
         SectionCard right = new SectionCard(
                 "前 100 行只读预览",
                 "固定上限 100；无写入、删除、更新或 DDL",
-                new JScrollPane(components.previewTable()));
+                UiFactory.tableScrollPane(components.previewTable()));
 
         JSplitPane centerAndRight = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, center, right);
         centerAndRight.setBorder(BorderFactory.createEmptyBorder());

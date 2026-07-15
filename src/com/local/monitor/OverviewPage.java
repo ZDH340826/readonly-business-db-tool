@@ -73,7 +73,7 @@ public final class OverviewPage extends JPanel {
         SectionCard tableCard = new SectionCard(
                 "点位组运行状态",
                 "状态、区域、使用位与备用位数据均来自最近一次真实检测",
-                new JScrollPane(statusTable));
+                UiFactory.tableScrollPane(statusTable));
         SectionCard detailCard = new SectionCard(
                 "点位组详情",
                 "规则摘要、持续时间、检测时间与点位明细",

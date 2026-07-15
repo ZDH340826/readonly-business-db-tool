@@ -33,6 +33,7 @@ import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.UIManager;
@@ -68,6 +69,7 @@ public final class ShelfPointMonitorAppUiTest {
         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
         gridBagPanelsDoNotOverlapCells();
         buttonsPaintReadableColorsAcrossEveryPage();
+        standardTablesUseReadableScrollPanesAcrossEveryPage();
         groupStatusTextUsesOperatorChinese();
         groupSummaryDoesNotExposeTechnicalFields();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
@@ -229,6 +231,29 @@ public final class ShelfPointMonitorAppUiTest {
         double contrast = contrastRatio(textColor, configuredBackground);
         TestSupport.assertTrue(contrast >= 4.5d,
                 pageName + " / " + text + " text must remain readable; contrast=" + contrast);
+    }
+
+    private static void standardTablesUseReadableScrollPanesAcrossEveryPage() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                TestSupport.assertTrue(navigation != null, "table audit requires the final navigation list");
+                for (int page = 0; page < navigation.getModel().getSize(); page++) {
+                    navigation.setSelectedIndex(page);
+                    String pageName = String.valueOf(navigation.getModel().getElementAt(page));
+                    List<JTable> tables = new ArrayList<>();
+                    collectVisibleTables(app.getContentPane(), tables);
+                    for (JTable table : tables) {
+                        Component ancestor = SwingUtilities.getAncestorOfClass(JScrollPane.class, table);
+                        TestSupport.assertTrue(ancestor instanceof ReadableTableScrollPane,
+                                pageName + " / standard data table must support horizontal browsing");
+                    }
+                }
+            } finally {
+                app.dispose();
+            }
+        });
     }
 
     private static double contrastRatio(Color first, Color second) {
@@ -1547,6 +1572,20 @@ public final class ShelfPointMonitorAppUiTest {
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
                 collectVisibleButtons(child, buttons);
+            }
+        }
+    }
+
+    private static void collectVisibleTables(Component component, List<JTable> tables) {
+        if (!component.isVisible()) {
+            return;
+        }
+        if (component instanceof JTable) {
+            tables.add((JTable) component);
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                collectVisibleTables(child, tables);
             }
         }
     }

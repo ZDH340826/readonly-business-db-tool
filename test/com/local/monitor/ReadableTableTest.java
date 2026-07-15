@@ -1,5 +1,10 @@
 package com.local.monitor;
 
+import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
@@ -12,6 +17,8 @@ public final class ReadableTableTest {
         standardTablesDoNotCompressAllColumns();
         headersAndRowsDetermineBoundedPreferredWidths();
         modelStructureChangesRecalculateNewColumns();
+        tableScrollPaneShowsHorizontalRangeOnlyWhenNeeded();
+        shiftWheelMovesTheHorizontalBar();
         System.out.println("ReadableTableTest PASS");
     }
 
@@ -83,6 +90,64 @@ public final class ReadableTableTest {
                         "new preview columns must be resized after a structure change");
             }
         });
+    }
+
+    private static void tableScrollPaneShowsHorizontalRangeOnlyWhenNeeded() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            JTable table = tableWithEightReadableColumns();
+            JScrollPane pane = UiFactory.tableScrollPane(table);
+            pane.setSize(420, 240);
+            pane.doLayout();
+            TestSupport.assertEquals(
+                    JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED,
+                    pane.getHorizontalScrollBarPolicy(),
+                    "wide tables need an as-needed horizontal bar");
+            TestSupport.assertTrue(
+                    table.getPreferredSize().width > pane.getViewport().getExtentSize().width,
+                    "wide table content must exceed the viewport instead of being compressed");
+        });
+    }
+
+    private static void shiftWheelMovesTheHorizontalBar() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            JTable table = tableWithEightReadableColumns();
+            JScrollPane pane = UiFactory.tableScrollPane(table);
+            pane.setSize(320, 220);
+            pane.doLayout();
+            JScrollBar horizontal = pane.getHorizontalScrollBar();
+            TestSupport.assertTrue(horizontal.isVisible(),
+                    "wide table must expose its horizontal scrollbar");
+            int before = horizontal.getValue();
+            MouseWheelEvent event = new MouseWheelEvent(
+                    pane,
+                    MouseEvent.MOUSE_WHEEL,
+                    System.currentTimeMillis(),
+                    InputEvent.SHIFT_DOWN_MASK,
+                    120,
+                    80,
+                    0,
+                    false,
+                    MouseWheelEvent.WHEEL_UNIT_SCROLL,
+                    3,
+                    2);
+            pane.dispatchEvent(event);
+            TestSupport.assertTrue(horizontal.getValue() > before,
+                    "Shift plus mouse wheel must move the horizontal scrollbar");
+        });
+    }
+
+    private static JTable tableWithEightReadableColumns() {
+        Object[] columns = new Object[8];
+        Object[] row = new Object[8];
+        for (int index = 0; index < columns.length; index++) {
+            columns[index] = "完整字段名称" + (index + 1);
+            row[index] = "示例数据-" + (index + 1);
+        }
+        DefaultTableModel model = new DefaultTableModel(columns, 0);
+        model.addRow(row);
+        JTable table = new JTable(model);
+        UiFactory.configureTable(table);
+        return table;
     }
 
     private static final class TestSupport {

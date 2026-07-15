@@ -86,7 +86,7 @@ public final class AlertCenterPage extends JPanel {
         SectionCard tableCard = new SectionCard(
                 "报警事件",
                 "操作目标始终使用 groupId，不通过区域名或组名反查",
-                new JScrollPane(alertTable));
+                UiFactory.tableScrollPane(alertTable));
         SectionCard detailCard = new SectionCard(
                 "事件详情",
                 "查询失败与业务缺料、业务恢复分别呈现",

@@ -6,6 +6,7 @@ import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.JLabel;
@@ -27,6 +28,10 @@ public final class UiFactory {
 
     public static JButton dangerButton(String text) {
         return styleActionButton(new JButton(text), AppTheme.DANGER, Color.WHITE, AppTheme.DANGER);
+    }
+
+    public static JScrollPane tableScrollPane(JTable table) {
+        return new ReadableTableScrollPane(table);
     }
 
     public static void configureTable(JTable table) {
