@@ -7,6 +7,7 @@ import java.util.List;
 public final class GroupConfigStoreTest {
     public static void main(String[] args) throws Exception {
         savesAndLoadsPointGroups();
+        savesAndLoadsGroupsWithMultipleUsePoints();
         missingConfigReturnsDefaultGroup();
         validationErrorsUseChineseOperatorText();
         rejectsRulesThatRequireMoreBackupsThanConfigured();
@@ -14,6 +15,33 @@ public final class GroupConfigStoreTest {
         loadsOldConfigWithBackupThresholdParticipationEnabled();
         savesAndLoadsBackupThresholdParticipation();
         System.out.println("GroupConfigStoreTest PASS");
+    }
+
+    private static void savesAndLoadsGroupsWithMultipleUsePoints() throws Exception {
+        Path configPath = Files.createTempDirectory("group-config-multi-use-test")
+                .resolve("group-config.properties");
+        GroupConfigStore store = new GroupConfigStore(configPath);
+        PointGroupDefinition source = new PointGroupDefinition(
+                "group-multi-use",
+                "区域 A",
+                "双上料口",
+                "示例物料",
+                true,
+                60,
+                List.of(
+                        new GroupMonitorPoint("use-1", "USE_POINT_001", "使用位 1", PointRole.USE, true, 1),
+                        new GroupMonitorPoint("use-2", "USE_POINT_002", "使用位 2", PointRole.USE, true, 2),
+                        new GroupMonitorPoint("backup-1", "BACKUP_POINT_001", "备用位 1", PointRole.BACKUP, true, 3)),
+                new GroupAlertRule(true, true, 1, 5, true));
+
+        store.save(List.of(source));
+
+        List<PointGroupDefinition> loaded = store.load();
+        long enabledUsePointCount = loaded.get(0).points().stream()
+                .filter(point -> point.enabled() && point.role() == PointRole.USE)
+                .count();
+        TestSupport.assertEquals(2L, enabledUsePointCount,
+                "multiple enabled use points should round-trip");
     }
 
     private static void savesAndLoadsPointGroups() throws Exception {

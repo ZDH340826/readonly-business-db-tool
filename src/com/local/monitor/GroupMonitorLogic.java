@@ -30,7 +30,7 @@ public final class GroupMonitorLogic {
         }
 
         List<PointStatusView> pointStatuses = PointStatusMapper.map(group.points(), records);
-        boolean usePointEmpty = false;
+        boolean anyUsePointUnavailable = false;
         int backupTotal = 0;
         int backupAvailable = 0;
 
@@ -40,7 +40,7 @@ public final class GroupMonitorLogic {
             }
             if (point.role() == PointRole.USE) {
                 if (!point.available()) {
-                    usePointEmpty = true;
+                    anyUsePointUnavailable = true;
                 }
             } else if (point.role() == PointRole.BACKUP) {
                 backupTotal++;
@@ -51,7 +51,7 @@ public final class GroupMonitorLogic {
         }
 
         GroupAlertRule rule = group.rule();
-        boolean useCondition = !rule.requireUsePointEmpty() || usePointEmpty;
+        boolean useCondition = !rule.requireUsePointEmpty() || anyUsePointUnavailable;
         boolean backupCondition = !rule.backupThresholdParticipates()
                 || backupAvailable < rule.minBackupAvailable();
         boolean ruleMatched = group.enabled() && rule.enabled() && useCondition && backupCondition;
@@ -87,7 +87,7 @@ public final class GroupMonitorLogic {
                 group.groupName(),
                 group.materialName(),
                 status,
-                usePointEmpty,
+                anyUsePointUnavailable,
                 backupTotal,
                 backupAvailable,
                 backupMissing,
@@ -99,7 +99,7 @@ public final class GroupMonitorLogic {
                 GroupStatusText.summary(
                         group,
                         status,
-                        usePointEmpty,
+                        anyUsePointUnavailable,
                         backupTotal,
                         backupAvailable,
                         continuousSeconds,

@@ -21,6 +21,9 @@ public final class GroupMonitorLogicTest {
         queryFailureClearsShortageTimingAndDoesNotAlert();
         recoveredShortageAfterQueryFailureStartsTimingAgain();
         recoveredHealthyGroupAfterQueryFailureReturnsNormal();
+        multipleUsePointsAllAvailableDoNotMatchUseCondition();
+        anyUnavailableUsePointMatchesUseCondition();
+        missingUsePointMatchesUseCondition();
         System.out.println("GroupMonitorLogicTest PASS");
     }
 
@@ -298,6 +301,47 @@ public final class GroupMonitorLogicTest {
         TestSupport.assertFalse(healthy.shouldShowDialog(), "healthy recovery should not show dialog");
     }
 
+    private static void multipleUsePointsAllAvailableDoNotMatchUseCondition() {
+        PointGroupDefinition group = multipleUsePointGroup();
+
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("USE_POINT_002", "SHELF_USE_002", 1, 0),
+                record("BACKUP_POINT_001", "", 1, 0)), new GroupRuntimeState(), BASE_TIME);
+
+        TestSupport.assertFalse(evaluation.usePointEmpty(),
+                "all available use points should keep the use condition false");
+        TestSupport.assertFalse(evaluation.ruleMatched(),
+                "backup shortage alone should not match when use points are available");
+    }
+
+    private static void anyUnavailableUsePointMatchesUseCondition() {
+        PointGroupDefinition group = multipleUsePointGroup();
+
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("USE_POINT_002", "", 1, 0),
+                record("BACKUP_POINT_001", "", 1, 0)), new GroupRuntimeState(), BASE_TIME);
+
+        TestSupport.assertTrue(evaluation.usePointEmpty(),
+                "one unavailable use point should match the use condition");
+        TestSupport.assertTrue(evaluation.ruleMatched(),
+                "one unavailable use point plus backup shortage should match the full rule");
+    }
+
+    private static void missingUsePointMatchesUseCondition() {
+        PointGroupDefinition group = multipleUsePointGroup();
+
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("BACKUP_POINT_001", "", 1, 0)), new GroupRuntimeState(), BASE_TIME);
+
+        TestSupport.assertTrue(evaluation.usePointEmpty(),
+                "a use point missing from the query result should match the use condition");
+        TestSupport.assertTrue(evaluation.ruleMatched(),
+                "a missing use point plus backup shortage should match the full rule");
+    }
+
     private static PointGroupDefinition defaultGroup(int minBackupAvailable, int durationMinutes) {
         return defaultGroup(minBackupAvailable, durationMinutes,
                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes));
@@ -338,6 +382,21 @@ public final class GroupMonitorLogicTest {
                         new GroupMonitorPoint("backup-003", "BACKUP_POINT_003", "Backup 3", PointRole.BACKUP, true, 4),
                         new GroupMonitorPoint("backup-004", "BACKUP_POINT_004", "Backup disabled", PointRole.BACKUP, false, 5)),
                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes));
+    }
+
+    private static PointGroupDefinition multipleUsePointGroup() {
+        return new PointGroupDefinition(
+                "group-multiple-use",
+                "Area A",
+                "Two Feed Ports",
+                "Material A",
+                true,
+                60,
+                List.of(
+                        new GroupMonitorPoint("use-001", "USE_POINT_001", "Use 1", PointRole.USE, true, 1),
+                        new GroupMonitorPoint("use-002", "USE_POINT_002", "Use 2", PointRole.USE, true, 2),
+                        new GroupMonitorPoint("backup-001", "BACKUP_POINT_001", "Backup 1", PointRole.BACKUP, true, 3)),
+                new GroupAlertRule(true, true, 1, 5, true));
     }
 
     private static List<PointRecord> shortageRecords() {
