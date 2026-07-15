@@ -28,6 +28,9 @@ public final class WindowsLauncherScriptTest {
         assertContains(build, "`r`n", "批处理必须统一为 Windows CRLF 换行");
         assertContains(build, "Get-FileHash", "构建必须计算发布 ZIP 的 SHA-256");
         assertContains(build, "SHA256SUMS.txt", "构建必须生成哈希清单");
+        assertContains(build, "LocalTestDbTool reset", "构建必须由本地演示工具生成测试数据");
+        assertContains(build, "data\\group-config.properties", "构建必须同时生成演示点位组配置");
+        assertNotContains(build, "group.count=1", "构建脚本不得继续手写单个演示点位组");
         assertNotContains(build, "password=", "脚本生成内容不得含密码");
     }
 

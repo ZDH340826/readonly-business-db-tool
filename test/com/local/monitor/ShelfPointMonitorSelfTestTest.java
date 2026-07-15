@@ -3,13 +3,26 @@ package com.local.monitor;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public final class ShelfPointMonitorSelfTestTest {
     public static void main(String[] args) throws Exception {
         packagedSelfTestValidatesReleaseLayout();
+        incompleteDemoCatalogFailsSelfTest();
         missingVersionFailsSelfTest();
         missingOperationsDocumentFailsSelfTest();
         System.out.println("ShelfPointMonitorSelfTestTest PASS");
+    }
+
+    private static void incompleteDemoCatalogFailsSelfTest() throws Exception {
+        Path root = Files.createTempDirectory("spm-self-test-incomplete-demo");
+        writeValidPackageLayout(root);
+        new GroupConfigStore(root.resolve("data/group-config.properties"))
+                .save(List.of(LocalDemoCatalog.groups().get(0)));
+
+        TestSupport.assertThrows(IllegalStateException.class,
+                () -> ShelfPointMonitorApp.runSelfTestForTest(root),
+                "packaged self-test should reject an incomplete one-group demo catalog");
     }
 
     private static void packagedSelfTestValidatesReleaseLayout() throws Exception {
@@ -123,6 +136,7 @@ public final class ShelfPointMonitorSelfTestTest {
                 "group.0.point.1.role=BACKUP",
                 "group.0.point.1.enabled=true",
                 "group.0.point.1.sortOrder=2"), StandardCharsets.UTF_8);
+        new GroupConfigStore(root.resolve("data/group-config.properties")).save(LocalDemoCatalog.groups());
     }
 
     private static final class TestSupport {

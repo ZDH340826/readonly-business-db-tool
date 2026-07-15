@@ -434,14 +434,7 @@ extends JFrame {
             throw new IllegalStateException("connections.properties must include placeholder and local profiles");
         }
         List<PointGroupDefinition> list = new GroupConfigStore(path6).load();
-        if (list.isEmpty()) {
-            throw new IllegalStateException("group-config.properties must include a sample group");
-        }
-        PointGroupDefinition pointGroupDefinition = (PointGroupDefinition)list.get(0);
-        if (!pointGroupDefinition.rule().backupThresholdParticipates()) {
-            throw new IllegalStateException("sample group must enable backupThresholdParticipates");
-        }
-        ShelfPointMonitorApp.assertSampleGroupPoints(pointGroupDefinition.points(), "group-config.properties points");
+        ShelfPointMonitorApp.assertPackagedDemoCatalog(list);
         Path path7 = path2.resolve(storedConfig.localPath).normalize();
         if (!path7.startsWith(path2)) {
             throw new IllegalStateException("local test database path must stay under packaged root");
@@ -508,6 +501,35 @@ extends JFrame {
         }
         for (GroupMonitorPoint groupMonitorPoint : list) {
             ShelfPointMonitorApp.assertSamplePointCode(text, groupMonitorPoint.code());
+        }
+    }
+
+    private static void assertPackagedDemoCatalog(List<PointGroupDefinition> actualGroups) {
+        List<PointGroupDefinition> expectedGroups = LocalDemoCatalog.groups();
+        if (actualGroups.size() != expectedGroups.size()) {
+            throw new IllegalStateException("group-config.properties must include the full local demo catalog");
+        }
+        for (int groupIndex = 0; groupIndex < expectedGroups.size(); groupIndex++) {
+            PointGroupDefinition expectedGroup = expectedGroups.get(groupIndex);
+            PointGroupDefinition actualGroup = actualGroups.get(groupIndex);
+            if (!expectedGroup.id().equals(actualGroup.id())
+                    || !expectedGroup.groupName().equals(actualGroup.groupName())
+                    || expectedGroup.rule().minBackupAvailable() != actualGroup.rule().minBackupAvailable()
+                    || expectedGroup.points().size() != actualGroup.points().size()) {
+                throw new IllegalStateException("group-config.properties local demo group mismatch");
+            }
+            for (int pointIndex = 0; pointIndex < expectedGroup.points().size(); pointIndex++) {
+                GroupMonitorPoint expectedPoint = expectedGroup.points().get(pointIndex);
+                GroupMonitorPoint actualPoint = actualGroup.points().get(pointIndex);
+                if (!expectedPoint.code().equals(actualPoint.code())
+                        || expectedPoint.role() != actualPoint.role()
+                        || expectedPoint.enabled() != actualPoint.enabled()) {
+                    throw new IllegalStateException("group-config.properties local demo point mismatch");
+                }
+            }
+            ShelfPointMonitorApp.assertSampleGroupPoints(
+                    actualGroup.points(),
+                    "group-config.properties points");
         }
     }
 

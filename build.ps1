@@ -246,52 +246,6 @@ points=Use=USE_POINT_001=1;Backup 1=BACKUP_POINT_001=10;Backup 2=BACKUP_POINT_00
 '@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'data\config.properties')
 
 @'
-group.count=1
-group.0.id=sample-group-001
-group.0.areaName=Area A
-group.0.groupName=Sample Material Group
-group.0.materialName=Sample Material
-group.0.enabled=true
-group.0.checkIntervalSeconds=60
-group.0.rule.enabled=true
-group.0.rule.requireUsePointEmpty=true
-group.0.rule.minBackupAvailable=3
-group.0.rule.durationMinutes=5
-group.0.rule.backupThresholdParticipates=true
-group.0.point.count=5
-group.0.point.0.id=sample-use-001
-group.0.point.0.code=USE_POINT_001
-group.0.point.0.alias=Use
-group.0.point.0.role=USE
-group.0.point.0.enabled=true
-group.0.point.0.sortOrder=1
-group.0.point.1.id=sample-backup-001
-group.0.point.1.code=BACKUP_POINT_001
-group.0.point.1.alias=Backup 1
-group.0.point.1.role=BACKUP
-group.0.point.1.enabled=true
-group.0.point.1.sortOrder=2
-group.0.point.2.id=sample-backup-002
-group.0.point.2.code=BACKUP_POINT_002
-group.0.point.2.alias=Backup 2
-group.0.point.2.role=BACKUP
-group.0.point.2.enabled=true
-group.0.point.2.sortOrder=3
-group.0.point.3.id=sample-backup-003
-group.0.point.3.code=BACKUP_POINT_003
-group.0.point.3.alias=Backup 3
-group.0.point.3.role=BACKUP
-group.0.point.3.enabled=true
-group.0.point.3.sortOrder=4
-group.0.point.4.id=sample-backup-004
-group.0.point.4.code=BACKUP_POINT_004
-group.0.point.4.alias=Backup 4
-group.0.point.4.role=BACKUP
-group.0.point.4.enabled=true
-group.0.point.4.sortOrder=5
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'data\group-config.properties')
-
-@'
 currentProfile=prod
 profile.count=2
 profile.0.id=prod
@@ -320,7 +274,7 @@ $runtimeJava = Join-Path $dist 'runtime\bin\java.exe'
 if (!(Test-Path $runtimeJava)) {
     $runtimeJava = $java
 }
-& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset (Join-Path $dist 'data\local-test-db')
+& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset (Join-Path $dist 'data\local-test-db') (Join-Path $dist 'data\group-config.properties')
 if ($LASTEXITCODE -ne 0) { throw "local test database creation failed with exit code $LASTEXITCODE" }
 
 & $runtimeJava "-Dshelf.monitor.appRoot=$dist" -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp --self-test
