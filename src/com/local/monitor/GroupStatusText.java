@@ -78,7 +78,10 @@ public final class GroupStatusText {
                 .append("：")
                 .append(statusText(status))
                 .append("。");
-        builder.append("使用位").append(usePointEmpty ? "无料" : "有料").append("；");
+        int usePointTotal = enabledUsePointCount(pointStatuses);
+        int usePointAvailable = availableUsePointCount(pointStatuses);
+        builder.append("使用位有料 ").append(usePointAvailable).append("/").append(usePointTotal).append("；");
+        builder.append("任一使用位无料：").append(usePointEmpty ? "是" : "否").append("；");
         builder.append("备用位有料 ").append(backupAvailable).append("/").append(backupTotal).append("；");
         builder.append("持续 ")
                 .append(minutesText(continuousMatchedSeconds))
@@ -87,6 +90,32 @@ public final class GroupStatusText {
                 .append(" 分钟。");
         builder.append("点位状态：").append(pointStatusSummary(pointStatuses));
         return builder.toString();
+    }
+
+    private static int enabledUsePointCount(List<PointStatusView> pointStatuses) {
+        int count = 0;
+        if (pointStatuses == null) {
+            return count;
+        }
+        for (PointStatusView view : pointStatuses) {
+            if (view.enabled() && view.role() == PointRole.USE) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static int availableUsePointCount(List<PointStatusView> pointStatuses) {
+        int count = 0;
+        if (pointStatuses == null) {
+            return count;
+        }
+        for (PointStatusView view : pointStatuses) {
+            if (view.enabled() && view.role() == PointRole.USE && view.available()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static String pointStatusSummary(List<PointStatusView> pointStatuses) {

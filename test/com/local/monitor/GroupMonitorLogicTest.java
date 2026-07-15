@@ -325,6 +325,18 @@ public final class GroupMonitorLogicTest {
 
         TestSupport.assertTrue(evaluation.usePointEmpty(),
                 "one unavailable use point should match the use condition");
+        TestSupport.assertEquals(2, evaluation.usePointTotal(),
+                "evaluation should expose the enabled use point total");
+        TestSupport.assertEquals(1, evaluation.usePointAvailableCount(),
+                "evaluation should expose the available use point count");
+        TestSupport.assertEquals(1, evaluation.unavailableUsePoints().size(),
+                "evaluation should identify each unavailable use point");
+        TestSupport.assertEquals("USE_POINT_002", evaluation.unavailableUsePoints().get(0).pointCode(),
+                "unavailable use point details should identify the land code");
+        TestSupport.assertContains(evaluation.message(), "使用位有料 1/2",
+                "summary should show the multi-use availability ratio");
+        TestSupport.assertContains(evaluation.message(), "任一使用位无料：是",
+                "summary should explain the any-use alarm condition");
         TestSupport.assertTrue(evaluation.ruleMatched(),
                 "one unavailable use point plus backup shortage should match the full rule");
     }

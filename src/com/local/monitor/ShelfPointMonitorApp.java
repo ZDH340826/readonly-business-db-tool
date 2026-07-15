@@ -243,7 +243,7 @@ extends JFrame {
     private final JTextField groupMaterialField = new JTextField(14);
     private final JCheckBox groupEnabledBox = new JCheckBox("\u542f\u7528");
     private final JCheckBox ruleEnabledBox = new JCheckBox("\u542f\u7528\u89c4\u5219", true);
-    private final JCheckBox requireUseEmptyBox = new JCheckBox("\u4f7f\u7528\u4f4d\u65e0\u8d27\u67b6", true);
+    private final JCheckBox requireUseEmptyBox = new JCheckBox("\u4efb\u4e00\u542f\u7528\u4f7f\u7528\u4f4d\u65e0\u6599", true);
     private final JCheckBox backupThresholdParticipatesBox = new JCheckBox("\u5907\u7528\u4f4d\u4e0b\u9650\u53c2\u4e0e\u62a5\u8b66", true);
     private final JSpinner minBackupAvailableSpinner = new JSpinner(new SpinnerNumberModel(3, 0, 999, 1));
     private final JSpinner durationMinutesSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 1440, 1));
@@ -1767,8 +1767,8 @@ extends JFrame {
         String text2 = pointStatusView.reason() == null || pointStatusView.reason().isBlank() ? "--" : pointStatusView.reason();
         panel.add(label);
         panel.add(label2);
-        panel.add(new JLabel("\u70b9\u4f4d\uff1a" + pointStatusView.pointCode()));
-        panel.add(new JLabel("\u8d27\u67b6\uff1a" + text));
+        panel.add(new JLabel("\u5730\u7801\uff1a" + pointStatusView.pointCode()));
+        panel.add(new JLabel("\u8d27\u7801\uff1a" + text));
         panel.add(new JLabel("\u539f\u56e0\uff1a" + text2));
         return panel;
     }
@@ -2064,7 +2064,18 @@ extends JFrame {
 
     private String groupAlertText(GroupEvaluation groupEvaluation) {
         String text = System.lineSeparator();
-        return "\u68c0\u6d4b\u65f6\u95f4\uff1a" + TIME_FORMAT.format(LocalDateTime.now()) + text + groupEvaluation.areaName() + " / " + groupEvaluation.groupName() + " " + this.alertHeadlineStatusText(groupEvaluation.status()) + text + "\u7269\u6599\uff1a" + groupEvaluation.materialName() + text + "\u4f7f\u7528\u4f4d\uff1a" + (groupEvaluation.usePointEmpty() ? "\u65e0\u6599" : "\u6709\u6599") + text + "\u5907\u7528\u4f4d\uff1a" + groupEvaluation.backupAvailableCount() + "/" + groupEvaluation.backupTotal() + " \u6709\u6599" + text + "\u6301\u7eed\uff1a" + groupEvaluation.continuousMatchedMinutes() + " \u5206\u949f" + text + text + "\u5f02\u5e38\u70b9\u4f4d\u5217\u8868\uff1a" + text + this.abnormalPointText(groupEvaluation) + text + text + "\u62a5\u8b66\u6761\u4ef6\u5df2\u8fbe\u5230\u62a5\u8b66\u65f6\u95f4\uff0c\u8bf7\u73b0\u573a\u786e\u8ba4\u8865\u6599\u6216\u8c03\u5ea6\u72b6\u6001\u3002";
+        return "检测时间：" + TIME_FORMAT.format(LocalDateTime.now()) + text
+                + groupEvaluation.areaName() + " / " + groupEvaluation.groupName() + " "
+                + this.alertHeadlineStatusText(groupEvaluation.status()) + text
+                + "物料：" + groupEvaluation.materialName() + text
+                + "使用位有料：" + groupEvaluation.usePointAvailableCount() + "/"
+                + groupEvaluation.usePointTotal() + text
+                + "任一使用位无料：" + (groupEvaluation.usePointEmpty() ? "是" : "否") + text
+                + "备用位：" + groupEvaluation.backupAvailableCount() + "/"
+                + groupEvaluation.backupTotal() + " 有料" + text
+                + "持续：" + groupEvaluation.continuousMatchedMinutes() + " 分钟" + text + text
+                + "异常点位列表：" + text + this.abnormalPointText(groupEvaluation) + text + text
+                + "报警条件已达到报警时间，请现场确认补料或调度状态。";
     }
 
     private String abnormalPointText(GroupEvaluation groupEvaluation) {
@@ -2074,7 +2085,15 @@ extends JFrame {
             if (messageBuilder.length() > 0) {
                 messageBuilder.append(System.lineSeparator());
             }
-            messageBuilder.append(this.roleText(pointStatusView.role())).append(" ").append(pointStatusView.pointCode()).append(" ").append(pointStatusView.statusText()).append(" \u539f\u56e0\uff1a").append(pointStatusView.reason() == null || pointStatusView.reason().isBlank() ? "\u672a\u586b\u5199\u539f\u56e0" : pointStatusView.reason());
+            messageBuilder.append(this.roleText(pointStatusView.role()))
+                    .append(" 地码：")
+                    .append(pointStatusView.pointCode())
+                    .append(" ")
+                    .append(pointStatusView.statusText())
+                    .append(" 原因：")
+                    .append(pointStatusView.reason() == null || pointStatusView.reason().isBlank()
+                            ? "未填写原因"
+                            : pointStatusView.reason());
         }
         if (messageBuilder.length() == 0) {
             return "\u65e0\u5f02\u5e38\u70b9\u4f4d\u660e\u7ec6";

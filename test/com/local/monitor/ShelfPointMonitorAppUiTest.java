@@ -368,6 +368,8 @@ public final class ShelfPointMonitorAppUiTest {
                         "dashboard should show alert duration");
                 TestSupport.assertTrue(texts.contains("备用位下限参与报警"),
                         "dashboard should allow backup threshold participation");
+                TestSupport.assertTrue(texts.contains("任一启用使用位无料"),
+                        "dashboard should explain the multiple-use alarm condition in operator language");
                 TestSupport.assertTrue(texts.contains("点位状态看板"),
                         "dashboard should have status board title");
                 TestSupport.assertTrue(texts.contains("当前判断：未检测"),
@@ -469,6 +471,10 @@ public final class ShelfPointMonitorAppUiTest {
                         "point status board should show missing text");
                 TestSupport.assertTrue(texts.contains(PointMaterialStatus.DISABLED.displayText()),
                         "point status board should show disabled text");
+                TestSupport.assertTrue(texts.contains("地码：USE_POINT_001"),
+                        "point cards should use the agreed land-code term");
+                TestSupport.assertTrue(texts.contains("货码：SHELF_USE_001"),
+                        "point cards should use the agreed cargo-code term");
             } finally {
                 app.dispose();
             }
@@ -994,7 +1000,9 @@ public final class ShelfPointMonitorAppUiTest {
                 groupEvaluationWithAbnormalPointStatuses().pointStatuses());
 
         TestSupport.assertContains(summary, "需关注", "summary should use operator status text");
-        TestSupport.assertContains(summary, "使用位无料", "summary should show use point material state");
+        TestSupport.assertContains(summary, "使用位有料 0/1", "summary should show use point availability ratio");
+        TestSupport.assertContains(summary, "任一使用位无料：是",
+                "summary should explain the any-use alarm condition");
         TestSupport.assertContains(summary, "备用位有料 1/3", "summary should show backup material count");
         assertNoTechnicalGroupText(summary, "group summary");
     }
@@ -1014,13 +1022,14 @@ public final class ShelfPointMonitorAppUiTest {
                 TestSupport.assertContains(text, "A区 / 一号料架 需要关注",
                         "dialog should identify the area and group in operator language");
                 TestSupport.assertContains(text, "物料：标准件", "dialog should show material");
-                TestSupport.assertContains(text, "使用位：无料", "dialog should show use point state");
+                TestSupport.assertContains(text, "使用位有料：0/1",
+                        "dialog should show the use point availability ratio");
                 TestSupport.assertContains(text, "备用位：1/3 有料", "dialog should show backup available count");
                 TestSupport.assertContains(text, "持续：3 分钟", "dialog should show rounded duration minutes");
                 TestSupport.assertContains(text, "异常点位列表", "dialog should label abnormal point details");
-                TestSupport.assertContains(text, "使用位 USE_POINT_001 无料 原因：无货架",
+                TestSupport.assertContains(text, "使用位 地码：USE_POINT_001 无料 原因：无货架",
                         "dialog should list empty use point with reason");
-                TestSupport.assertContains(text, "备用位 BACKUP_POINT_002 未查到 原因：未返回记录",
+                TestSupport.assertContains(text, "备用位 地码：BACKUP_POINT_002 未查到 原因：未返回记录",
                         "dialog should list missing backup point with reason");
                 TestSupport.assertNotContains(text, "BACKUP_POINT_001",
                         "dialog should not list available points as abnormal");
@@ -1046,7 +1055,7 @@ public final class ShelfPointMonitorAppUiTest {
 
                 String text = (String) alertText.invoke(app, groupEvaluationWithBackupShortageAlert());
 
-                TestSupport.assertContains(text, "使用位：有料",
+                TestSupport.assertContains(text, "使用位有料：1/1",
                         "dialog should show the use point state from evaluation");
                 TestSupport.assertNotContains(text, "使用位无料已达到报警时间",
                         "dialog should not claim use point empty when it has material");
