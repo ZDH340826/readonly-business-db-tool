@@ -32,7 +32,8 @@ public final class WindowsPathPackagingTest {
         try (Connection connection = ReadOnlyConnectionFactory.open(config, new char[0]);
                 Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery("select count(*) from public.tcs_map_data")) {
-            assertTrue(rows.next() && rows.getInt(1) == 5, "中文空格路径中的本地库必须可只读查询");
+            assertTrue(rows.next() && rows.getInt(1) == LocalDemoCatalog.databaseRows().size(),
+                    "中文空格路径中的本地库必须完整且可只读查询");
         }
 
         Path csv = root.resolve("exports/当前 查询结果.csv");

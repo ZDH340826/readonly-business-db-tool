@@ -19,6 +19,7 @@ public final class FieldDeliveryScenarioTest {
     private static void requiredScenarioEvidenceRemainsMapped() throws Exception {
         List<ScenarioEvidence> scenarios = List.of(
                 evidence("本地测试库正常场景", "LocalTestDatabaseTest", "seededDatabaseSupportsGroupShortageScenario"),
+                evidence("本地八类演示场景", "LocalTestDatabaseTest", "demoCatalogCoversRepresentativeFieldConditions"),
                 evidence("使用位缺料场景", "GroupMonitorLogicTest", "firstMatchingRuleStartsPendingWithZeroElapsedSeconds"),
                 evidence("备用位不足场景", "GroupMonitorLogicTest", "matchingRuleCreatesActiveAlertAfterFiveRealMinutes"),
                 evidence("健康组正常", "GroupMonitorLogicTest", "healthyGroupCreatesNormalEvaluation"),
@@ -46,7 +47,7 @@ public final class FieldDeliveryScenarioTest {
                 evidence("八个真实页面可导航", "ShelfPointMonitorAppUiTest", "finalNavigationPagesCanSwitchAndAreNotBlank"),
                 evidence("中文空格路径可运行", "WindowsPathPackagingTest", "chineseAndSpacedPathSupportsFieldArtifacts"));
 
-        assertEquals(27, scenarios.size(), "必须保留 27 项现场场景证据");
+        assertEquals(28, scenarios.size(), "必须保留 28 项现场场景证据");
         for (ScenarioEvidence scenario : scenarios) {
             String source = Files.readString(scenario.source(), StandardCharsets.UTF_8);
             assertContains(source, "void " + scenario.method() + "(",

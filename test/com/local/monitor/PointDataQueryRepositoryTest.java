@@ -53,13 +53,13 @@ public final class PointDataQueryRepositoryTest {
 
         PointDataQuery firstPage = new PointDataQuery("", "", "", "", "", "", 2, 0);
         PointDataQueryResult first = repository.query(config, new char[0], firstPage);
-        TestSupport.assertEquals(5, first.totalCount(), "count query should return all matching rows");
+        TestSupport.assertEquals(33, first.totalCount(), "count query should return the full demo catalog");
         TestSupport.assertEquals(2, first.records().size(), "first page should use page size");
         TestSupport.assertEquals(0, first.offset(), "first page offset should be zero");
 
         PointDataQuery secondPage = new PointDataQuery("", "", "", "", "", "", 2, 2);
         PointDataQueryResult second = repository.query(config, new char[0], secondPage);
-        TestSupport.assertEquals(5, second.totalCount(), "second page should keep the same total");
+        TestSupport.assertEquals(33, second.totalCount(), "second page should keep the same total");
         TestSupport.assertEquals(2, second.records().size(), "second page should use offset");
         TestSupport.assertEquals(2, second.offset(), "second page offset should be two");
 
@@ -76,7 +76,7 @@ public final class PointDataQueryRepositoryTest {
         PointDataQueryRepository repository = new PointDataQueryRepository();
 
         PointDataQuery percent = new PointDataQuery("USE%", "", "", "", "", "", 20, 0);
-        PointDataQuery underscore = new PointDataQuery("USE_POINT_01", "", "", "", "", "", 20, 0);
+        PointDataQuery underscore = new PointDataQuery("USE_POINT_00_", "", "", "", "", "", 20, 0);
         PointDataQuery slash = new PointDataQuery("USE\\", "", "", "", "", "", 20, 0);
 
         TestSupport.assertEquals(0, repository.query(config, new char[0], percent).records().size(),

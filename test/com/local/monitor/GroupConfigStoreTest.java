@@ -73,9 +73,10 @@ public final class GroupConfigStoreTest {
 
         List<PointGroupDefinition> loaded = new GroupConfigStore(configPath).load();
 
-        TestSupport.assertEquals(1, loaded.size(), "missing config should provide one sample group");
+        TestSupport.assertEquals(8, loaded.size(), "missing config should provide the full demo scenario catalog");
         TestSupport.assertEquals("sample-group-001", loaded.get(0).id(), "default group should be stable");
-        TestSupport.assertEquals(5, loaded.get(0).points().size(), "default group should contain one use and four backups");
+        TestSupport.assertEquals(6, loaded.get(0).points().size(),
+                "first demo group should contain two use points and four backups");
     }
 
     private static void rejectsRulesThatRequireMoreBackupsThanConfigured() throws Exception {

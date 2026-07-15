@@ -63,20 +63,7 @@ public final class GroupConfigStore {
     }
 
     public static List<PointGroupDefinition> defaultGroups() {
-        return List.of(new PointGroupDefinition(
-                "sample-group-001",
-                "Area A",
-                "Sample Material Group",
-                "Sample Material",
-                true,
-                PointGroupDefinition.DEFAULT_CHECK_INTERVAL_SECONDS,
-                List.of(
-                        new GroupMonitorPoint("sample-use-001", "USE_POINT_001", "Use", PointRole.USE, true, 1),
-                        new GroupMonitorPoint("sample-backup-001", "BACKUP_POINT_001", "Backup 1", PointRole.BACKUP, true, 2),
-                        new GroupMonitorPoint("sample-backup-002", "BACKUP_POINT_002", "Backup 2", PointRole.BACKUP, true, 3),
-                        new GroupMonitorPoint("sample-backup-003", "BACKUP_POINT_003", "Backup 3", PointRole.BACKUP, true, 4),
-                        new GroupMonitorPoint("sample-backup-004", "BACKUP_POINT_004", "Backup 4", PointRole.BACKUP, true, 5)),
-                new GroupAlertRule(true, true, 3, 5)));
+        return LocalDemoCatalog.groups();
     }
 
     static void validateGroups(List<PointGroupDefinition> groups) {

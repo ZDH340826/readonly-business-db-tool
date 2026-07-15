@@ -10,6 +10,10 @@ public final class LocalTestDbTool {
         DbConfig config = DbConfig.localTest(path, 30);
         if ("reset".equalsIgnoreCase(scenario)) {
             LocalTestDatabase.reset(config);
+            if (args.length > 2) {
+                new GroupConfigStore(java.nio.file.Path.of(args[2])).save(LocalDemoCatalog.groups());
+                System.out.println("local demo group config written: " + args[2]);
+            }
             System.out.println("local test database reset: " + path);
         } else {
             LocalTestDatabase.setScenario(config, scenario);
