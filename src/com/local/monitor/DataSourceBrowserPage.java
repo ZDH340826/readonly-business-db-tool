@@ -3,6 +3,7 @@ package com.local.monitor;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
+import java.nio.file.Paths;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -14,13 +15,28 @@ import javax.swing.JTable;
 import javax.swing.JTree;
 
 public final class DataSourceBrowserPage extends JPanel {
+    private final PinnedTablePane previewPane;
+
     public DataSourceBrowserPage(Components components, Actions actions) {
+        this(components, actions,
+                new TableColumnLayoutStore(Paths.get("data", "table-column-layout.properties")));
+    }
+
+    public DataSourceBrowserPage(
+            Components components,
+            Actions actions,
+            TableColumnLayoutStore layoutStore) {
         super(new BorderLayout(14, 14));
+        this.previewPane = new PinnedTablePane(components.previewTable(), layoutStore);
         setName("数据源浏览器");
         setBackground(AppTheme.PAGE_BACKGROUND);
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         add(buildHeader(components, actions), BorderLayout.NORTH);
-        add(buildBrowserColumns(components, actions), BorderLayout.CENTER);
+        add(buildBrowserColumns(components, actions, previewPane), BorderLayout.CENTER);
+    }
+
+    public void previewLoaded(String schema, String table) {
+        previewPane.showTable(schema, table);
     }
 
     private static JPanel buildHeader(Components components, Actions actions) {
@@ -45,7 +61,10 @@ public final class DataSourceBrowserPage extends JPanel {
         return header;
     }
 
-    private static JSplitPane buildBrowserColumns(Components components, Actions actions) {
+    private static JSplitPane buildBrowserColumns(
+            Components components,
+            Actions actions,
+            PinnedTablePane previewPane) {
         for (JTable table : java.util.List.of(
                 components.objectTable(), components.columnTable(), components.previewTable())) {
             UiFactory.configureTable(table);
@@ -74,7 +93,7 @@ public final class DataSourceBrowserPage extends JPanel {
         SectionCard right = new SectionCard(
                 "前 100 行只读预览",
                 "固定上限 100；无写入、删除、更新或 DDL",
-                UiFactory.tableScrollPane(components.previewTable()));
+                previewPane);
 
         JSplitPane centerAndRight = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, center, right);
         centerAndRight.setBorder(BorderFactory.createEmptyBorder());

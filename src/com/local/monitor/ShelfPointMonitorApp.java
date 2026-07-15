@@ -94,6 +94,8 @@ extends JFrame {
     private final GroupConfigStore groupConfigStore = new GroupConfigStore(Paths.get("data", "group-config.properties"));
     private final ConnectionProfileStore profileStore = new ConnectionProfileStore(Paths.get("data", "connections.properties"));
     private final UiPreferencesStore uiPreferencesStore = new UiPreferencesStore(Paths.get("data", "ui-settings.properties"));
+    private final TableColumnLayoutStore tableColumnLayoutStore =
+            new TableColumnLayoutStore(Paths.get("data", "table-column-layout.properties"));
     private final PointRepository pointRepository = new PointRepository();
     private final DbMetadataRepository metadataRepository = new DbMetadataRepository();
     private final PointDataQueryRepository pointDataQueryRepository = new PointDataQueryRepository();
@@ -136,6 +138,7 @@ extends JFrame {
     private final JTable columnTable = new JTable(this.columnModel);
     private final DefaultTableModel previewModel = new DefaultTableModel();
     private final JTable previewTable = new JTable(this.previewModel);
+    private DataSourceBrowserPage dataSourceBrowserPage;
     private final JLabel schemaCountLabel = new JLabel("Schema \u6570\u91cf\uff1a--");
     private final JLabel objectCountLabel = new JLabel("\u8868 / \u89c6\u56fe\u6570\u91cf\uff1a--");
     private final JLabel objectTypeLabel = new JLabel("\u5f53\u524d\u5bf9\u8c61\u7c7b\u578b\uff1a--");
@@ -617,7 +620,11 @@ extends JFrame {
                 () -> this.runOnceInBackground(this::loadTablesForSelectedSchema),
                 this::loadSelectedTableColumns,
                 () -> this.runOnceInBackground(this::previewSelectedTable));
-        return new DataSourceBrowserPage(components, actions);
+        this.dataSourceBrowserPage = new DataSourceBrowserPage(
+                components,
+                actions,
+                this.tableColumnLayoutStore);
+        return this.dataSourceBrowserPage;
     }
 
     private JPanel browserStatCard(JLabel label) {
@@ -1186,6 +1193,7 @@ extends JFrame {
             for (List<String> list : tablePreview.rows()) {
                 this.previewModel.addRow(list.toArray());
             }
+            this.dataSourceBrowserPage.previewLoaded(text, text2);
             this.objectTypeLabel.setText("\u5f53\u524d\u5bf9\u8c61\u7c7b\u578b\uff1a\u9884\u89c8 " + tablePreview.rows().size() + " \u884c");
             this.appendStatus("\u5df2\u9884\u89c8\uff1a" + text + "." + text2 + " / " + tablePreview.rows().size() + " \u884c");
         });

@@ -2,6 +2,7 @@ package com.local.monitor;
 
 import java.awt.Component;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractButton;
@@ -74,10 +75,16 @@ public final class DataPagesTest {
     private static void browserPageHasThreeFinalColumnsAndRealActions() throws Exception {
         runOnEdtAndWait(() -> {
             int[] actions = new int[3];
+            DataSourceBrowserPage.Components components = browserComponents();
+            components.previewTable().setModel(new DefaultTableModel(
+                    new Object[] {"status", "map_data_code", "pod_code", "date_chg"}, 0));
             DataSourceBrowserPage page = new DataSourceBrowserPage(
-                    browserComponents(),
+                    components,
                     new DataSourceBrowserPage.Actions(
-                            () -> actions[0]++, () -> actions[1]++, () -> { }, () -> actions[2]++));
+                            () -> actions[0]++, () -> actions[1]++, () -> { }, () -> actions[2]++),
+                    new TableColumnLayoutStore(Files.createTempDirectory("browser-page-layout")
+                            .resolve("table-column-layout.properties")));
+            page.previewLoaded("public", "tcs_map_data");
             List<String> titles = findAll(page, SectionCard.class).stream().map(SectionCard::title).toList();
             assertTrue(titles.contains("Schema / 表 / 视图对象树"), "browser left tree column");
             assertTrue(titles.contains("对象元数据与列信息"), "browser center metadata column");
@@ -89,6 +96,12 @@ public final class DataPagesTest {
                 button.doClick();
                 assertEquals(1, actions[index], "browser action callback " + buttons.get(index));
             }
+            assertTrue(findButton(page, "固定重要列") != null,
+                    "preview must expose a visible fixed-column entry");
+            assertTrue(findButton(page, "恢复原顺序") != null,
+                    "preview must expose an obvious reset action");
+            assertTrue(findAll(page, ReadableTableScrollPane.class).size() >= 3,
+                    "browser tables must support horizontal browsing");
             assertEquals(32, findAll(page, JTable.class).get(0).getRowHeight(), "browser table row height");
             assertFalse(collectText(page).contains("执行 SQL"), "browser must not offer SQL execution");
         });

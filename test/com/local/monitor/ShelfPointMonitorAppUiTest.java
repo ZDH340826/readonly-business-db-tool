@@ -70,6 +70,7 @@ public final class ShelfPointMonitorAppUiTest {
         gridBagPanelsDoNotOverlapCells();
         buttonsPaintReadableColorsAcrossEveryPage();
         standardTablesUseReadableScrollPanesAcrossEveryPage();
+        dataSourcePreviewUsesOperatorFriendlyImportantColumnHeaders();
         groupStatusTextUsesOperatorChinese();
         groupSummaryDoesNotExposeTechnicalFields();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
@@ -250,6 +251,39 @@ public final class ShelfPointMonitorAppUiTest {
                                 pageName + " / standard data table must support horizontal browsing");
                     }
                 }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void dataSourcePreviewUsesOperatorFriendlyImportantColumnHeaders() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                javax.swing.table.DefaultTableModel previewModel = fieldValue(
+                        app, "previewModel", javax.swing.table.DefaultTableModel.class);
+                previewModel.setColumnIdentifiers(new Object[] {
+                        "status", "map_data_code", "pod_code", "date_chg"
+                });
+                DataSourceBrowserPage page = fieldValue(
+                        app, "dataSourceBrowserPage", DataSourceBrowserPage.class);
+                page.previewLoaded("public", "tcs_map_data");
+
+                PinnedTablePane previewPane = findFirst(app.getContentPane(), PinnedTablePane.class);
+                TestSupport.assertTrue(previewPane != null,
+                        "browser preview must use the fixed-column component");
+                JTable scrollingTable = findFirst(previewPane, JTable.class);
+                TestSupport.assertTrue(scrollingTable != null,
+                        "browser preview must retain its scrolling table");
+                String headers = java.util.stream.IntStream.range(0, scrollingTable.getColumnCount())
+                        .mapToObj(index -> String.valueOf(
+                                scrollingTable.getColumnModel().getColumn(index).getHeaderValue()))
+                        .collect(java.util.stream.Collectors.joining(" "));
+                TestSupport.assertTrue(headers.contains("地码") && headers.contains("map_data_code"),
+                        "map_data_code header must explain the agreed land-code term");
+                TestSupport.assertTrue(headers.contains("货码") && headers.contains("pod_code"),
+                        "pod_code header must explain the operator-facing cargo-code term");
             } finally {
                 app.dispose();
             }
