@@ -88,6 +88,10 @@ if ($LASTEXITCODE -ne 0) { throw "point data query tests failed with exit code $
 if ($LASTEXITCODE -ne 0) { throw "ui preferences tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ReadableTableTest
 if ($LASTEXITCODE -ne 0) { throw "readable table tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PinnedColumnLayoutTest
+if ($LASTEXITCODE -ne 0) { throw "pinned column layout tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.TableColumnLayoutStoreTest
+if ($LASTEXITCODE -ne 0) { throw "table column layout store tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppThemeTest
 if ($LASTEXITCODE -ne 0) { throw "app theme tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppShellTest
