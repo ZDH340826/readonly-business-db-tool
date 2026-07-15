@@ -2,6 +2,25 @@
 
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
+## [Unreleased]
+
+### Added
+
+- Eight local H2 demo groups backed by 33 synthetic rows, covering multi-use shortage, healthy use points, sufficient backups, abnormal status, lock, disabled, missing, normal, and threshold-edge behavior.
+- Separate Chinese actions for adding use points and backup points, plus grouped status-board sections and explicit land-code/cargo-code labels.
+- Regression coverage for multiple enabled use points, any-use-unavailable semantics, full demo packaging, and rejection of incomplete demo catalogs.
+
+### Changed
+
+- Point groups now accept one or more enabled use points. If any enabled use point is unavailable or missing, the existing use-point alarm condition is satisfied.
+- Operator-facing `map_data_code` and `pod_code` terminology is now consistently “地码” and “货码” in the affected query and group-management views.
+- The release build generates the local H2 database and all eight group definitions from one catalog instead of maintaining a duplicate one-group PowerShell configuration.
+
+### Security
+
+- Demo reset still rejects non-H2 configurations, and all production database access remains parameterized and read-only.
+- No real-looking point codes, site credentials, private network addresses, or field configuration were added.
+
 ## [0.5.0-rc.1] - 2026-07-14
 
 ### Added
