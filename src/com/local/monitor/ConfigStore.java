@@ -24,7 +24,8 @@ public final class ConfigStore {
         if (Files.exists(path)) {
             try (InputStream in = Files.newInputStream(path)) {
                 p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
-            } catch (IOException ignored) {
+            } catch (IOException | IllegalArgumentException exception) {
+                p.clear();
             }
         }
         return new StoredConfig(

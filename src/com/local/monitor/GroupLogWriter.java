@@ -54,7 +54,7 @@ public final class GroupLogWriter {
                 String.valueOf(evaluation.backupMissingCount()),
                 String.valueOf(evaluation.ruleMatched()),
                 String.valueOf(evaluation.continuousMatchedMinutes()),
-                evaluation.message()));
+                ShelfPointMonitorApp.sanitizeVisibleLog(evaluation.message())));
     }
 
     public void appendEvent(LocalDateTime eventAt, String eventType, GroupEvaluation evaluation) throws IOException {
@@ -66,7 +66,7 @@ public final class GroupLogWriter {
                 evaluation.groupName(),
                 evaluation.materialName(),
                 evaluation.status().name(),
-                evaluation.message()));
+                ShelfPointMonitorApp.sanitizeVisibleLog(evaluation.message())));
     }
 
     private static void append(Path path, List<String> header, List<String> row) throws IOException {

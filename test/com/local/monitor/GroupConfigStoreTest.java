@@ -7,11 +7,41 @@ import java.util.List;
 public final class GroupConfigStoreTest {
     public static void main(String[] args) throws Exception {
         savesAndLoadsPointGroups();
+        savesAndLoadsGroupsWithMultipleUsePoints();
         missingConfigReturnsDefaultGroup();
+        validationErrorsUseChineseOperatorText();
         rejectsRulesThatRequireMoreBackupsThanConfigured();
+        rejectsInvalidFinalUiGroupConfiguration();
         loadsOldConfigWithBackupThresholdParticipationEnabled();
         savesAndLoadsBackupThresholdParticipation();
         System.out.println("GroupConfigStoreTest PASS");
+    }
+
+    private static void savesAndLoadsGroupsWithMultipleUsePoints() throws Exception {
+        Path configPath = Files.createTempDirectory("group-config-multi-use-test")
+                .resolve("group-config.properties");
+        GroupConfigStore store = new GroupConfigStore(configPath);
+        PointGroupDefinition source = new PointGroupDefinition(
+                "group-multi-use",
+                "区域 A",
+                "双上料口",
+                "示例物料",
+                true,
+                60,
+                List.of(
+                        new GroupMonitorPoint("use-1", "USE_POINT_001", "使用位 1", PointRole.USE, true, 1),
+                        new GroupMonitorPoint("use-2", "USE_POINT_002", "使用位 2", PointRole.USE, true, 2),
+                        new GroupMonitorPoint("backup-1", "BACKUP_POINT_001", "备用位 1", PointRole.BACKUP, true, 3)),
+                new GroupAlertRule(true, true, 1, 5, true));
+
+        store.save(List.of(source));
+
+        List<PointGroupDefinition> loaded = store.load();
+        long enabledUsePointCount = loaded.get(0).points().stream()
+                .filter(point -> point.enabled() && point.role() == PointRole.USE)
+                .count();
+        TestSupport.assertEquals(2L, enabledUsePointCount,
+                "multiple enabled use points should round-trip");
     }
 
     private static void savesAndLoadsPointGroups() throws Exception {
@@ -43,9 +73,10 @@ public final class GroupConfigStoreTest {
 
         List<PointGroupDefinition> loaded = new GroupConfigStore(configPath).load();
 
-        TestSupport.assertEquals(1, loaded.size(), "missing config should provide one sample group");
+        TestSupport.assertEquals(8, loaded.size(), "missing config should provide the full demo scenario catalog");
         TestSupport.assertEquals("sample-group-001", loaded.get(0).id(), "default group should be stable");
-        TestSupport.assertEquals(5, loaded.get(0).points().size(), "default group should contain one use and four backups");
+        TestSupport.assertEquals(6, loaded.get(0).points().size(),
+                "first demo group should contain two use points and four backups");
     }
 
     private static void rejectsRulesThatRequireMoreBackupsThanConfigured() throws Exception {
@@ -55,6 +86,86 @@ public final class GroupConfigStoreTest {
         TestSupport.assertThrows(IllegalArgumentException.class,
                 () -> store.save(List.of(group("invalid-group", 5, 5, true))),
                 "rule requiring more backups than configured should be rejected");
+    }
+
+    private static void validationErrorsUseChineseOperatorText() {
+        try {
+            GroupConfigStore.validateGroups(List.of(group("invalid-cn", 5, 5, true)));
+        } catch (IllegalArgumentException ex) {
+            TestSupport.assertTrue(ex.getMessage().contains("备用位最小可用数量不得超过启用备用位数量"),
+                    "backup threshold validation should use Chinese operator text");
+            TestSupport.assertFalse(ex.getMessage().contains("minBackupAvailable"),
+                    "operator-visible validation should not expose internal field name");
+            return;
+        }
+        throw new AssertionError("invalid backup threshold should be rejected");
+    }
+
+    private static void rejectsInvalidFinalUiGroupConfiguration() throws Exception {
+        GroupMonitorPoint use = new GroupMonitorPoint("use", "USE_POINT_001", "使用位", PointRole.USE, true, 1);
+        GroupMonitorPoint backup = new GroupMonitorPoint("backup", "BACKUP_POINT_001", "备用位", PointRole.BACKUP, true, 2);
+        GroupMonitorPoint duplicateUse =
+                new GroupMonitorPoint("use2", "USE_POINT_001", "重复点位", PointRole.BACKUP, true, 2);
+        PointGroupDefinition valid = new PointGroupDefinition(
+                "group-001",
+                "区域A",
+                "后围板组",
+                "后围板总成",
+                true,
+                60,
+                List.of(use, backup),
+                new GroupAlertRule(true, true, 0, 5, true));
+
+        TestSupport.assertThrows(IllegalArgumentException.class,
+                () -> GroupConfigStore.validateGroups(List.of(valid, group("group-001", 1, 5, true))),
+                "duplicate group IDs should be rejected");
+        TestSupport.assertThrows(IllegalArgumentException.class,
+                () -> new PointGroupDefinition(
+                        "blank-name",
+                        "区域A",
+                        " ",
+                        "后围板总成",
+                        true,
+                        60,
+                        List.of(use, backup),
+                        new GroupAlertRule(true, true, 0, 5, true)),
+                "blank group name should be rejected");
+        TestSupport.assertThrows(IllegalArgumentException.class,
+                () -> new PointGroupDefinition(
+                        "no-use",
+                        "区域A",
+                        "后围板组",
+                        "后围板总成",
+                        true,
+                        60,
+                        List.of(new GroupMonitorPoint("backup", "BACKUP_POINT_001", "备用位", PointRole.BACKUP, true, 1)),
+                        new GroupAlertRule(true, true, 1, 5, true)),
+                "enabled group should require one enabled use point");
+        TestSupport.assertThrows(IllegalArgumentException.class,
+                () -> new PointGroupDefinition(
+                        "duplicate-point",
+                        "区域A",
+                        "后围板组",
+                        "后围板总成",
+                        true,
+                        60,
+                        List.of(use, duplicateUse),
+                        new GroupAlertRule(true, true, 1, 5, true)),
+                "duplicate point codes within a group should be rejected");
+        TestSupport.assertThrows(IllegalArgumentException.class,
+                () -> new PointGroupDefinition(
+                        "bad-interval",
+                        "区域A",
+                        "后围板组",
+                        "后围板总成",
+                        true,
+                        0,
+                        List.of(use, backup),
+                        new GroupAlertRule(true, true, 0, 5, true)),
+                "invalid check interval should be rejected");
+        TestSupport.assertThrows(IllegalArgumentException.class,
+                () -> new GroupAlertRule(true, true, 0, 0, true),
+                "invalid alert duration should be rejected");
     }
 
     private static void loadsOldConfigWithBackupThresholdParticipationEnabled() throws Exception {

@@ -82,6 +82,58 @@ if ($LASTEXITCODE -ne 0) { throw "group log writer tests failed with exit code $
 if ($LASTEXITCODE -ne 0) { throw "connection profile tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DbMetadataRepositoryTest
 if ($LASTEXITCODE -ne 0) { throw "metadata repository tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PointDataQueryRepositoryTest
+if ($LASTEXITCODE -ne 0) { throw "point data query tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.UiPreferencesStoreTest
+if ($LASTEXITCODE -ne 0) { throw "ui preferences tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ReadableTableTest
+if ($LASTEXITCODE -ne 0) { throw "readable table tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PinnedColumnLayoutTest
+if ($LASTEXITCODE -ne 0) { throw "pinned column layout tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.TableColumnLayoutStoreTest
+if ($LASTEXITCODE -ne 0) { throw "table column layout store tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.PinnedTablePaneTest
+if ($LASTEXITCODE -ne 0) { throw "pinned table pane tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppThemeTest
+if ($LASTEXITCODE -ne 0) { throw "app theme tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.AppShellTest
+if ($LASTEXITCODE -ne 0) { throw "app shell tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.OverviewAlertPageTest
+if ($LASTEXITCODE -ne 0) { throw "overview and alert page tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.GroupConnectionPageTest
+if ($LASTEXITCODE -ne 0) { throw "group and connection page tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.CsvExportServiceTest
+if ($LASTEXITCODE -ne 0) { throw "CSV export service tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DataPagesTest
+if ($LASTEXITCODE -ne 0) { throw "data page tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.DiagnosticBundleServiceTest
+if ($LASTEXITCODE -ne 0) { throw "diagnostic bundle tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.LogsSettingsPageTest
+if ($LASTEXITCODE -ne 0) { throw "logs and settings page tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.FieldDeliveryScenarioTest
+if ($LASTEXITCODE -ne 0) { throw "field delivery scenario tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.WindowsPathPackagingTest
+if ($LASTEXITCODE -ne 0) { throw "Windows path packaging tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.FieldDeploymentPreflightTest
+if ($LASTEXITCODE -ne 0) { throw "field deployment preflight tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.WindowsLauncherScriptTest
+if ($LASTEXITCODE -ne 0) { throw "Windows launcher script tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionTest
+if ($LASTEXITCODE -ne 0) { throw "monitoring session tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.MonitoringSessionRaceTest
+if ($LASTEXITCODE -ne 0) { throw "monitoring session race tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ErrorSanitizationTest
+if ($LASTEXITCODE -ne 0) { throw "error sanitization tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SensitiveDataSanitizationTest
+if ($LASTEXITCODE -ne 0) { throw "sensitive data sanitization tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ReadOnlyConnectionTest
+if ($LASTEXITCODE -ne 0) { throw "read-only connection tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ExecutorSeparationTest
+if ($LASTEXITCODE -ne 0) { throw "executor separation tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SystemHealthStatusTest
+if ($LASTEXITCODE -ne 0) { throw "system health status tests failed with exit code $LASTEXITCODE" }
+& $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.SourceHygieneTest
+if ($LASTEXITCODE -ne 0) { throw "source hygiene tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorAppUiTest
 if ($LASTEXITCODE -ne 0) { throw "ui layout tests failed with exit code $LASTEXITCODE" }
 & $java -cp "$driverJar;$h2Jar;$classes;$testClasses" com.local.monitor.ShelfPointMonitorSelfTestTest
@@ -90,14 +142,20 @@ if ($LASTEXITCODE -ne 0) { throw "self-test validation tests failed with exit co
 if (Test-Path $dist) {
     Remove-Item -LiteralPath $dist -Recurse -Force
 }
-New-Item -ItemType Directory -Force -Path $dist, (Join-Path $dist 'lib'), (Join-Path $dist 'data'), (Join-Path $dist 'logs') | Out-Null
+New-Item -ItemType Directory -Force -Path $dist, (Join-Path $dist 'lib'), (Join-Path $dist 'data'), (Join-Path $dist 'logs'), (Join-Path $dist 'diagnostics') | Out-Null
 Set-Content -Encoding ASCII -Path (Join-Path $dist 'VERSION') -Value $version
 
 & $jar --create --file (Join-Path $dist 'ShelfPointMonitor.jar') --main-class com.local.monitor.ShelfPointMonitorApp -C $classes .
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
 Copy-Item -LiteralPath $driverJar -Destination (Join-Path $dist 'lib\postgresql-42.2.25.jar') -Force
 Copy-Item -LiteralPath $h2Jar -Destination (Join-Path $dist 'lib\h2-2.2.224.jar') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs\manuals\现场运维交付手册.md') -Destination (Join-Path $dist '现场运维交付手册.md') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs\ops\现场验收清单.md') -Destination (Join-Path $dist '现场验收清单.md') -Force
+Copy-Item -LiteralPath (Join-Path $root 'docs\ops\回滚说明.md') -Destination (Join-Path $dist '回滚说明.md') -Force
 
+if ($version -match '-rc' -and !$jlinkPath) {
+    throw "RC packaging requires jlink so the field package has an embedded runtime."
+}
 if ($jlinkPath) {
     & $jlinkPath `
         --add-modules java.desktop,java.sql,java.naming,java.logging,java.management,java.security.sasl,jdk.crypto.ec,jdk.charsets `
@@ -111,56 +169,68 @@ if ($jlinkPath) {
 @'
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'ShelfPointMonitor.bat')
+if not exist "%JAVA_EXE%" (
+  where java >nul 2>nul
+  if errorlevel 1 (
+    echo [失败] 未找到可用的 Java，请确认发布包完整。
+    endlocal & exit /b 2
+  )
+  set "JAVA_EXE=java"
+)
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp %*
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
+'@ | Set-Content -Encoding UTF8 -Path (Join-Path $dist '启动工具.bat')
 
 @'
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_Reset.bat')
+if not exist "%JAVA_EXE%" (
+  where java >nul 2>nul
+  if errorlevel 1 (
+    echo [失败] 未找到可用的 Java，请确认发布包完整。
+    endlocal & exit /b 2
+  )
+  set "JAVA_EXE=java"
+)
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.FieldDeploymentPreflight "%~dp0."
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
+'@ | Set-Content -Encoding UTF8 -Path (Join-Path $dist '现场部署检查.bat')
 
 @'
 @echo off
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
 set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool normal
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_Normal.bat')
+if not exist "%JAVA_EXE%" (
+  where java >nul 2>nul
+  if errorlevel 1 (
+    echo [失败] 未找到可用的 Java，请确认发布包完整。
+    endlocal & exit /b 2
+  )
+  set "JAVA_EXE=java"
+)
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -cp "ShelfPointMonitor.jar;lib\postgresql-42.2.25.jar;lib\h2-2.2.224.jar" com.local.monitor.DiagnosticBundleTool "%~dp0."
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
+'@ | Set-Content -Encoding UTF8 -Path (Join-Path $dist '生成诊断包.bat')
 
-@'
-@echo off
-setlocal
-cd /d "%~dp0"
-set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool missing-use
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_MissingUse.bat')
-
-@'
-@echo off
-setlocal
-cd /d "%~dp0"
-set "JAVA_EXE=%~dp0runtime\bin\java.exe"
-if not exist "%JAVA_EXE%" set "JAVA_EXE=java"
-"%JAVA_EXE%" -cp "ShelfPointMonitor.jar;lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool missing-backup
-pause
-endlocal
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'LocalTest_MissingBackup.bat')
+foreach ($scriptPath in @(
+        (Join-Path $dist '启动工具.bat'),
+        (Join-Path $dist '现场部署检查.bat'),
+        (Join-Path $dist '生成诊断包.bat'))) {
+    $scriptText = [System.IO.File]::ReadAllText($scriptPath, [System.Text.Encoding]::UTF8)
+    $scriptText = $scriptText -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText($scriptPath, $scriptText, [System.Text.UTF8Encoding]::new($false))
+}
 
 @'
 host=__SITE_HOST__
@@ -174,52 +244,6 @@ sslmode=disable
 intervalSeconds=10
 points=Use=USE_POINT_001=1;Backup 1=BACKUP_POINT_001=10;Backup 2=BACKUP_POINT_002=10;Backup 3=BACKUP_POINT_003=10;Backup 4=BACKUP_POINT_004=10
 '@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'data\config.properties')
-
-@'
-group.count=1
-group.0.id=sample-group-001
-group.0.areaName=Area A
-group.0.groupName=Sample Material Group
-group.0.materialName=Sample Material
-group.0.enabled=true
-group.0.checkIntervalSeconds=60
-group.0.rule.enabled=true
-group.0.rule.requireUsePointEmpty=true
-group.0.rule.minBackupAvailable=3
-group.0.rule.durationMinutes=5
-group.0.rule.backupThresholdParticipates=true
-group.0.point.count=5
-group.0.point.0.id=sample-use-001
-group.0.point.0.code=USE_POINT_001
-group.0.point.0.alias=Use
-group.0.point.0.role=USE
-group.0.point.0.enabled=true
-group.0.point.0.sortOrder=1
-group.0.point.1.id=sample-backup-001
-group.0.point.1.code=BACKUP_POINT_001
-group.0.point.1.alias=Backup 1
-group.0.point.1.role=BACKUP
-group.0.point.1.enabled=true
-group.0.point.1.sortOrder=2
-group.0.point.2.id=sample-backup-002
-group.0.point.2.code=BACKUP_POINT_002
-group.0.point.2.alias=Backup 2
-group.0.point.2.role=BACKUP
-group.0.point.2.enabled=true
-group.0.point.2.sortOrder=3
-group.0.point.3.id=sample-backup-003
-group.0.point.3.code=BACKUP_POINT_003
-group.0.point.3.alias=Backup 3
-group.0.point.3.role=BACKUP
-group.0.point.3.enabled=true
-group.0.point.3.sortOrder=4
-group.0.point.4.id=sample-backup-004
-group.0.point.4.code=BACKUP_POINT_004
-group.0.point.4.alias=Backup 4
-group.0.point.4.role=BACKUP
-group.0.point.4.enabled=true
-group.0.point.4.sortOrder=5
-'@ | Set-Content -Encoding ASCII -Path (Join-Path $dist 'data\group-config.properties')
 
 @'
 currentProfile=prod
@@ -250,15 +274,32 @@ $runtimeJava = Join-Path $dist 'runtime\bin\java.exe'
 if (!(Test-Path $runtimeJava)) {
     $runtimeJava = $java
 }
-& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset (Join-Path $dist 'data\local-test-db')
+& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.LocalTestDbTool reset (Join-Path $dist 'data\local-test-db') (Join-Path $dist 'data\group-config.properties')
 if ($LASTEXITCODE -ne 0) { throw "local test database creation failed with exit code $LASTEXITCODE" }
+
+& $runtimeJava "-Dshelf.monitor.appRoot=$dist" -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.ShelfPointMonitorApp --self-test
+if ($LASTEXITCODE -ne 0) { throw "packaged self-test failed with exit code $LASTEXITCODE" }
+& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.FieldDeploymentPreflight $dist
+if ($LASTEXITCODE -ne 0) { throw "packaged preflight failed with exit code $LASTEXITCODE" }
+& $runtimeJava -cp "$dist\ShelfPointMonitor.jar;$dist\lib\postgresql-42.2.25.jar;$dist\lib\h2-2.2.224.jar" com.local.monitor.DiagnosticBundleTool $dist
+if ($LASTEXITCODE -ne 0) { throw "packaged diagnostic tool failed with exit code $LASTEXITCODE" }
+Get-ChildItem -LiteralPath (Join-Path $dist 'diagnostics') -Filter 'diagnostic-*.zip' -File | Remove-Item -Force
 
 Get-ChildItem -Path (Join-Path $root 'dist') -Filter '*.zip' -File | Remove-Item -Force
 $zip = Join-Path $root ("dist\ReadonlyBusinessDbTool-v$version.zip")
 Compress-Archive -Path $dist -DestinationPath $zip -Force
+$zipName = [System.IO.Path]::GetFileName($zip)
+$zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToUpperInvariant()
+$hashFile = Join-Path $root 'dist\SHA256SUMS.txt'
+$hashLine = "$zipHash  $zipName"
+[System.IO.File]::WriteAllText($hashFile, $hashLine + "`r`n", [System.Text.Encoding]::ASCII)
+if ((Get-Content -Raw -LiteralPath $hashFile).Trim() -ne $hashLine) {
+    throw "SHA256SUMS.txt verification failed."
+}
 
 Write-Host "Built: $dist"
 Write-Host "Version: $version"
 Write-Host "Zip:   $zip"
+Write-Host "SHA256: $zipHash"
 
 

@@ -73,7 +73,9 @@ public final class DbMetadataRepository {
                                         columnName,
                                         rs.getString("TYPE_NAME"),
                                         rs.getInt("COLUMN_SIZE"),
-                                        rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable));
+                                        rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable,
+                                        rs.getString("COLUMN_DEF"),
+                                        rs.getString("REMARKS")));
                             }
                         }
                     }

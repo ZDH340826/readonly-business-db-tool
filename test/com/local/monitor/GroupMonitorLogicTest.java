@@ -18,6 +18,12 @@ public final class GroupMonitorLogicTest {
         backupThresholdCanBeIgnoredWhenRuleDisablesParticipation();
         pointStatusesAreImmutableSnapshots();
         runtimeStateRoundsElapsedTimeAndHandlesClockSkew();
+        queryFailureClearsShortageTimingAndDoesNotAlert();
+        recoveredShortageAfterQueryFailureStartsTimingAgain();
+        recoveredHealthyGroupAfterQueryFailureReturnsNormal();
+        multipleUsePointsAllAvailableDoNotMatchUseCondition();
+        anyUnavailableUsePointMatchesUseCondition();
+        missingUsePointMatchesUseCondition();
         System.out.println("GroupMonitorLogicTest PASS");
     }
 
@@ -227,6 +233,127 @@ public final class GroupMonitorLogicTest {
                 "minutes should round up");
     }
 
+    private static void queryFailureClearsShortageTimingAndDoesNotAlert() {
+        PointGroupDefinition group = defaultGroup(3, 5);
+        GroupRuntimeState state = new GroupRuntimeState();
+        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
+        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME.plusMinutes(4));
+
+        GroupEvaluation failed = GroupMonitorLogic.queryFailed(
+                group,
+                state,
+                BASE_TIME.plusMinutes(5),
+                "查询失败：连接超时");
+
+        TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, failed.status(),
+                "query failure should have an independent status");
+        TestSupport.assertFalse(failed.ruleMatched(), "query failure must not match shortage rule");
+        TestSupport.assertFalse(failed.shouldShowDialog(), "query failure must not show shortage dialog");
+        TestSupport.assertEquals(0, failed.continuousMatchedSeconds(),
+                "query failure should not keep previous shortage seconds");
+        TestSupport.assertEquals(null, state.conditionFirstMatchedAt(),
+                "query failure should clear previous shortage start time");
+        TestSupport.assertEquals(BASE_TIME.plusMinutes(5), state.lastCheckedAt(),
+                "query failure should still update last checked time");
+        TestSupport.assertContains(failed.message(), "查询失败", "failure message should be operator visible");
+        TestSupport.assertNotContains(failed.message(), "EMPTY", "failure message must not look like material state");
+        TestSupport.assertNotContains(failed.message(), "ACTIVE_ALERT", "failure message must not leak alert enum");
+    }
+
+    private static void recoveredShortageAfterQueryFailureStartsTimingAgain() {
+        PointGroupDefinition group = defaultGroup(3, 5);
+        GroupRuntimeState state = new GroupRuntimeState();
+        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
+        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME.plusMinutes(4));
+        GroupMonitorLogic.queryFailed(group, state, BASE_TIME.plusMinutes(5), "查询失败：连接超时");
+
+        GroupEvaluation recoveredButStillShortage = GroupMonitorLogic.evaluate(
+                group,
+                shortageRecords(),
+                state,
+                BASE_TIME.plusMinutes(6));
+
+        TestSupport.assertEquals(GroupAlertStatus.PENDING_ALERT, recoveredButStillShortage.status(),
+                "shortage after query recovery should start pending again");
+        TestSupport.assertEquals(0, recoveredButStillShortage.continuousMatchedSeconds(),
+                "shortage timing must restart after query recovery");
+        TestSupport.assertFalse(recoveredButStillShortage.shouldShowDialog(),
+                "recovered first shortage check must not alert immediately");
+    }
+
+    private static void recoveredHealthyGroupAfterQueryFailureReturnsNormal() {
+        PointGroupDefinition group = defaultGroup(3, 5);
+        GroupRuntimeState state = new GroupRuntimeState();
+        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
+        GroupMonitorLogic.queryFailed(group, state, BASE_TIME.plusMinutes(1), "查询失败：连接超时");
+
+        GroupEvaluation healthy = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0),
+                record("BACKUP_POINT_002", "SHELF_BACKUP_002", 1, 0),
+                record("BACKUP_POINT_003", "SHELF_BACKUP_003", 1, 0),
+                record("BACKUP_POINT_004", "", 1, 0)), state, BASE_TIME.plusMinutes(2));
+
+        TestSupport.assertEquals(GroupAlertStatus.NORMAL, healthy.status(),
+                "healthy query recovery should return normal");
+        TestSupport.assertEquals(0, healthy.continuousMatchedSeconds(),
+                "healthy recovery should not have shortage timing");
+        TestSupport.assertFalse(healthy.shouldShowDialog(), "healthy recovery should not show dialog");
+    }
+
+    private static void multipleUsePointsAllAvailableDoNotMatchUseCondition() {
+        PointGroupDefinition group = multipleUsePointGroup();
+
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("USE_POINT_002", "SHELF_USE_002", 1, 0),
+                record("BACKUP_POINT_001", "", 1, 0)), new GroupRuntimeState(), BASE_TIME);
+
+        TestSupport.assertFalse(evaluation.usePointEmpty(),
+                "all available use points should keep the use condition false");
+        TestSupport.assertFalse(evaluation.ruleMatched(),
+                "backup shortage alone should not match when use points are available");
+    }
+
+    private static void anyUnavailableUsePointMatchesUseCondition() {
+        PointGroupDefinition group = multipleUsePointGroup();
+
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("USE_POINT_002", "", 1, 0),
+                record("BACKUP_POINT_001", "", 1, 0)), new GroupRuntimeState(), BASE_TIME);
+
+        TestSupport.assertTrue(evaluation.usePointEmpty(),
+                "one unavailable use point should match the use condition");
+        TestSupport.assertEquals(2, evaluation.usePointTotal(),
+                "evaluation should expose the enabled use point total");
+        TestSupport.assertEquals(1, evaluation.usePointAvailableCount(),
+                "evaluation should expose the available use point count");
+        TestSupport.assertEquals(1, evaluation.unavailableUsePoints().size(),
+                "evaluation should identify each unavailable use point");
+        TestSupport.assertEquals("USE_POINT_002", evaluation.unavailableUsePoints().get(0).pointCode(),
+                "unavailable use point details should identify the land code");
+        TestSupport.assertContains(evaluation.message(), "使用位有料 1/2",
+                "summary should show the multi-use availability ratio");
+        TestSupport.assertContains(evaluation.message(), "任一使用位无料：是",
+                "summary should explain the any-use alarm condition");
+        TestSupport.assertTrue(evaluation.ruleMatched(),
+                "one unavailable use point plus backup shortage should match the full rule");
+    }
+
+    private static void missingUsePointMatchesUseCondition() {
+        PointGroupDefinition group = multipleUsePointGroup();
+
+        GroupEvaluation evaluation = GroupMonitorLogic.evaluate(group, List.of(
+                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
+                record("BACKUP_POINT_001", "", 1, 0)), new GroupRuntimeState(), BASE_TIME);
+
+        TestSupport.assertTrue(evaluation.usePointEmpty(),
+                "a use point missing from the query result should match the use condition");
+        TestSupport.assertTrue(evaluation.ruleMatched(),
+                "a missing use point plus backup shortage should match the full rule");
+    }
+
     private static PointGroupDefinition defaultGroup(int minBackupAvailable, int durationMinutes) {
         return defaultGroup(minBackupAvailable, durationMinutes,
                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes));
@@ -267,6 +394,21 @@ public final class GroupMonitorLogicTest {
                         new GroupMonitorPoint("backup-003", "BACKUP_POINT_003", "Backup 3", PointRole.BACKUP, true, 4),
                         new GroupMonitorPoint("backup-004", "BACKUP_POINT_004", "Backup disabled", PointRole.BACKUP, false, 5)),
                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes));
+    }
+
+    private static PointGroupDefinition multipleUsePointGroup() {
+        return new PointGroupDefinition(
+                "group-multiple-use",
+                "Area A",
+                "Two Feed Ports",
+                "Material A",
+                true,
+                60,
+                List.of(
+                        new GroupMonitorPoint("use-001", "USE_POINT_001", "Use 1", PointRole.USE, true, 1),
+                        new GroupMonitorPoint("use-002", "USE_POINT_002", "Use 2", PointRole.USE, true, 2),
+                        new GroupMonitorPoint("backup-001", "BACKUP_POINT_001", "Backup 1", PointRole.BACKUP, true, 3)),
+                new GroupAlertRule(true, true, 1, 5, true));
     }
 
     private static List<PointRecord> shortageRecords() {

@@ -1,0 +1,668 @@
+﻿diff --git a/.gitignore b/.gitignore
+index 1f16ab8..f939d9c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -25,6 +25,7 @@ group-config.properties
+ Thumbs.db
+ .idea/
+ .vscode/
++.obsidian/
+ *.iml
+
+ # Java artifacts
+diff --git a/src/com/local/monitor/GroupAlertStatus.java b/src/com/local/monitor/GroupAlertStatus.java
+index fd06811..01cca8f 100644
+--- a/src/com/local/monitor/GroupAlertStatus.java
++++ b/src/com/local/monitor/GroupAlertStatus.java
+@@ -4,5 +4,6 @@ public enum GroupAlertStatus {
+     NORMAL,
+     PENDING_ALERT,
+     ACTIVE_ALERT,
+-    ACKED_ALERT
++    ACKED_ALERT,
++    QUERY_FAILED
+ }
+diff --git a/src/com/local/monitor/GroupMonitorLogic.java b/src/com/local/monitor/GroupMonitorLogic.java
+index 018f811..ca5cdfa 100644
+--- a/src/com/local/monitor/GroupMonitorLogic.java
++++ b/src/com/local/monitor/GroupMonitorLogic.java
+@@ -107,6 +107,48 @@ public final class GroupMonitorLogic {
+                         pointStatuses));
+     }
+
++    public static GroupEvaluation queryFailed(
++            PointGroupDefinition group,
++            GroupRuntimeState state,
++            LocalDateTime now,
++            String errorSummary) {
++        if (group == null) {
++            throw new IllegalArgumentException("group is required");
++        }
++        if (state == null) {
++            throw new IllegalArgumentException("runtime state is required");
++        }
++        if (now == null) {
++            throw new IllegalArgumentException("now is required");
++        }
++        state.markQueryFailed(now);
++        int backupTotal = 0;
++        for (GroupMonitorPoint point : group.points()) {
++            if (point.enabled() && point.role() == PointRole.BACKUP) {
++                backupTotal++;
++            }
++        }
++        String message = errorSummary == null || errorSummary.isBlank()
++                ? "查询失败：本次未能从数据库获得点位状态。"
++                : errorSummary;
++        return new GroupEvaluation(
++                group.id(),
++                group.areaName(),
++                group.groupName(),
++                group.materialName(),
++                GroupAlertStatus.QUERY_FAILED,
++                false,
++                backupTotal,
++                0,
++                0,
++                false,
++                0,
++                group.rule().durationSeconds(),
++                List.of(),
++                false,
++                message);
++    }
++
+     static boolean isAvailable(PointRecord record) {
+         return record != null
+                 && !MonitorLogic.isBlank(record.podCode())
+diff --git a/src/com/local/monitor/GroupRuntimeState.java b/src/com/local/monitor/GroupRuntimeState.java
+index d7bf8d0..d44d949 100644
+--- a/src/com/local/monitor/GroupRuntimeState.java
++++ b/src/com/local/monitor/GroupRuntimeState.java
+@@ -77,6 +77,11 @@ public final class GroupRuntimeState {
+         activeDialogShown = true;
+     }
+
++    void markQueryFailed(LocalDateTime checkedAt) {
++        reset();
++        lastCheckedAt = checkedAt;
++    }
++
+     void reset() {
+         conditionFirstMatchedAt = null;
+         conditionLastMatchedAt = null;
+diff --git a/src/com/local/monitor/GroupStatusText.java b/src/com/local/monitor/GroupStatusText.java
+index 335c312..78ed363 100644
+--- a/src/com/local/monitor/GroupStatusText.java
++++ b/src/com/local/monitor/GroupStatusText.java
+@@ -7,6 +7,9 @@ public final class GroupStatusText {
+     }
+
+     public static String statusText(GroupAlertStatus status) {
++        if (status == GroupAlertStatus.QUERY_FAILED) {
++            return "查询失败";
++        }
+         if (status == GroupAlertStatus.NORMAL) {
+             return "正常";
+         }
+@@ -62,6 +65,10 @@ public final class GroupStatusText {
+             int continuousMatchedSeconds,
+             int alertDurationSeconds,
+             List<PointStatusView> pointStatuses) {
++        if (status == GroupAlertStatus.QUERY_FAILED) {
++            return areaName + " / " + groupName + " / " + materialName
++                    + "：查询失败，本次未获得点位状态。";
++        }
+         StringBuilder builder = new StringBuilder();
+         builder.append(areaName)
+                 .append(" / ")
+diff --git a/src/com/local/monitor/ShelfPointMonitorApp.java b/src/com/local/monitor/ShelfPointMonitorApp.java
+index 0695237..28b9b3f 100644
+--- a/src/com/local/monitor/ShelfPointMonitorApp.java
++++ b/src/com/local/monitor/ShelfPointMonitorApp.java
+@@ -160,6 +160,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+     private char[] currentPassword = new char[0];
+     private ScheduledFuture<?> scheduledTask;
+     private JDialog activeDialog;
++    private String activeDialogGroupId = "";
+
+     public static void main(String[] args) {
+         if (args.length > 0 && "--self-test".equals(args[0])) {
+@@ -1193,7 +1194,18 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 records = fetcher.fetch(group);
+             } catch (Exception ex) {
+                 failedGroups++;
+-                appendStatus(source + "失败，点位组 " + group.id() + " 数据库查询失败：" + ex.getMessage());
++                String errorSummary = queryFailureMessage(ex);
++                GroupEvaluation evaluation;
++                synchronized (groupMonitorLock) {
++                    evaluation = GroupMonitorLogic.queryFailed(group, state, now, errorSummary);
++                }
++                appendCheckLog(now, evaluation);
++                appendGroupEvents(now, evaluation);
++                evaluations.add(evaluation);
++                closeActiveGroupAlertDialogIfOwnedBy(group.id());
++                updateSelectedGroupBoard(evaluation);
++                runtime.append(formatGroupCheckResult(source, List.of(), evaluation)).append(System.lineSeparator());
++                appendStatus(source + "失败，点位组 " + group.id() + " " + errorSummary);
+                 continue;
+             }
+             GroupEvaluation evaluation;
+@@ -1265,12 +1277,23 @@ public final class ShelfPointMonitorApp extends JFrame {
+             lastGroupStatuses.put(evaluation.groupId(), evaluation.status());
+         }
+         try {
+-            if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
+-                    && previous != GroupAlertStatus.ACTIVE_ALERT
+-                    && previous != GroupAlertStatus.ACKED_ALERT) {
+-                groupLogWriter.appendEvent(now, "ALERT_OPEN", evaluation);
+-            } else if (evaluation.status() == GroupAlertStatus.NORMAL && previous != GroupAlertStatus.NORMAL) {
+-                groupLogWriter.appendEvent(now, "RECOVERED", evaluation);
++            if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++                if (previous != GroupAlertStatus.QUERY_FAILED) {
++                    groupLogWriter.appendEvent(now, "QUERY_FAILED", evaluation);
++                }
++            } else {
++                if (previous == GroupAlertStatus.QUERY_FAILED) {
++                    groupLogWriter.appendEvent(now, "QUERY_RECOVERED", evaluation);
++                }
++                if (evaluation.status() == GroupAlertStatus.ACTIVE_ALERT
++                        && previous != GroupAlertStatus.ACTIVE_ALERT
++                        && previous != GroupAlertStatus.ACKED_ALERT) {
++                    groupLogWriter.appendEvent(now, "ALERT_OPEN", evaluation);
++                } else if (evaluation.status() == GroupAlertStatus.NORMAL
++                        && previous != GroupAlertStatus.NORMAL
++                        && previous != GroupAlertStatus.QUERY_FAILED) {
++                    groupLogWriter.appendEvent(now, "RECOVERED", evaluation);
++                }
+             }
+         } catch (Exception ex) {
+             appendStatus("CSV事件日志写入失败：" + ex.getMessage());
+@@ -1286,6 +1309,27 @@ public final class ShelfPointMonitorApp extends JFrame {
+         constraints.weightx = 1.0;
+         constraints.weighty = 0.0;
+
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED) {
++            JPanel card = new JPanel(new GridLayout(0, 1, 4, 4));
++            card.setBackground(new Color(255, 250, 230));
++            card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
++                    javax.swing.BorderFactory.createLineBorder(new Color(190, 120, 30), 2),
++                    javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12)));
++            JLabel title = new JLabel("查询失败");
++            title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
++            title.setForeground(new Color(160, 92, 20));
++            card.add(title);
++            card.add(new JLabel(evaluation.message()));
++            card.add(new JLabel("本次未获得点位状态，不按无料处理。"));
++            constraints.gridx = 0;
++            constraints.gridy = 0;
++            constraints.gridwidth = 4;
++            pointStatusPanel.add(card, constraints);
++            pointStatusPanel.revalidate();
++            pointStatusPanel.repaint();
++            return;
++        }
++
+         List<PointStatusView> usePoints = new ArrayList<>();
+         List<PointStatusView> backupPoints = new ArrayList<>();
+         for (PointStatusView point : evaluation.pointStatuses()) {
+@@ -1361,17 +1405,24 @@ public final class ShelfPointMonitorApp extends JFrame {
+     }
+
+     private String formatGroupCheckResult(String source, List<PointRecord> records, GroupEvaluation evaluation) {
+-        String message = GroupStatusText.summary(
+-                evaluation.areaName(),
+-                evaluation.groupName(),
+-                evaluation.materialName(),
+-                evaluation.status(),
+-                evaluation.usePointEmpty(),
+-                evaluation.backupTotal(),
+-                evaluation.backupAvailableCount(),
+-                evaluation.continuousMatchedSeconds(),
+-                evaluation.alertDurationSeconds(),
+-                evaluation.pointStatuses());
++        String message;
++        if (evaluation.status() == GroupAlertStatus.QUERY_FAILED
++                && evaluation.message() != null
++                && !evaluation.message().isBlank()) {
++            message = evaluation.message();
++        } else {
++            message = GroupStatusText.summary(
++                    evaluation.areaName(),
++                    evaluation.groupName(),
++                    evaluation.materialName(),
++                    evaluation.status(),
++                    evaluation.usePointEmpty(),
++                    evaluation.backupTotal(),
++                    evaluation.backupAvailableCount(),
++                    evaluation.continuousMatchedSeconds(),
++                    evaluation.alertDurationSeconds(),
++                    evaluation.pointStatuses());
++        }
+         return TIME_FORMAT.format(LocalDateTime.now())
+                 + " "
+                 + GroupStatusText.statusText(evaluation.status())
+@@ -1379,6 +1430,47 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 + message;
+     }
+
++    private static String queryFailureMessage(Exception ex) {
++        return "查询失败：" + sanitizedExceptionSummary(ex);
++    }
++
++    private static String sanitizedExceptionSummary(Exception ex) {
++        String raw = ex == null ? "" : ex.getMessage();
++        if (raw == null || raw.isBlank()) {
++            raw = ex == null ? "未知错误" : ex.getClass().getSimpleName();
++        } else if (ex != null) {
++            raw = ex.getClass().getSimpleName() + ": " + raw;
++        }
++        String safe = raw.replace('\r', ' ').replace('\n', ' ');
++        safe = safe.replaceAll("(?i)jdbc:[^\\s,;]+", "jdbc:***");
++        safe = safe.replaceAll("(?i)((?:password|passwd|pwd|token|access_token|secret)\\s*[=:]\\s*)[^\\s,;]+",
++                "$1***");
++        safe = safe.replaceAll("(?i)((?:user\\s*id|uid|user(?:name)?|role)\\s*[=:]\\s*)[^\\s,;]+",
++                "$1***");
++        safe = safe.replaceAll("(?i)user\\s+\"[^\"]+\"", "user ***");
++        safe = safe.replaceAll("(?i)user\\s+'[^']+'", "user ***");
++        safe = safe.replaceAll("(?i)role\\s+\"[^\"]+\"", "role ***");
++        safe = safe.replaceAll("(?i)role\\s+'[^']+'", "role ***");
++        safe = safe.replaceAll("\\bat\\s+[A-Za-z0-9_.$]+\\([^)]*\\)", "");
++        safe = safe.replaceAll("[A-Za-z0-9_.$-]+\\.java:\\d+", "***.java:***");
++        safe = safe.replaceAll("\\s+", " ").trim();
++        if (safe.length() > 180) {
++            safe = safe.substring(0, 177) + "...";
++        }
++        return safe.isBlank() ? "未知错误" : safe;
++    }
++
++    private void closeActiveGroupAlertDialogIfOwnedBy(String groupId) {
++        SwingUtilities.invokeLater(() -> {
++            if (activeDialog == null || groupId == null || !groupId.equals(activeDialogGroupId)) {
++                return;
++            }
++            activeDialog.dispose();
++            activeDialog = null;
++            activeDialogGroupId = "";
++        });
++    }
++
+     private void startMonitoring() {
+         try {
+             DbConfig config = requireCurrentConfig(60);
+@@ -1440,11 +1532,13 @@ public final class ShelfPointMonitorApp extends JFrame {
+             dialog.add(buildGroupAlertButtons(evaluation, () -> {
+                 dialog.dispose();
+                 activeDialog = null;
++                activeDialogGroupId = "";
+             }), BorderLayout.SOUTH);
+
+             dialog.setSize(640, 420);
+             dialog.setLocationRelativeTo(this);
+             activeDialog = dialog;
++            activeDialogGroupId = evaluation.groupId();
+             dialog.setVisible(true);
+         });
+     }
+@@ -1754,6 +1848,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+                 appendStatus("用户已关注报警：" + evaluation.alertKey());
+                 dialog.dispose();
+                 activeDialog = null;
++                activeDialogGroupId = "";
+             });
+             JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+             buttons.add(ack);
+@@ -1762,6 +1857,7 @@ public final class ShelfPointMonitorApp extends JFrame {
+             dialog.setSize(520, 320);
+             dialog.setLocationRelativeTo(this);
+             activeDialog = dialog;
++            activeDialogGroupId = "";
+             dialog.setVisible(true);
+         });
+     }
+diff --git a/test/com/local/monitor/GroupMonitorLogicTest.java b/test/com/local/monitor/GroupMonitorLogicTest.java
+index c9dc4e1..28d1ab8 100644
+--- a/test/com/local/monitor/GroupMonitorLogicTest.java
++++ b/test/com/local/monitor/GroupMonitorLogicTest.java
+@@ -18,6 +18,9 @@ public final class GroupMonitorLogicTest {
+         backupThresholdCanBeIgnoredWhenRuleDisablesParticipation();
+         pointStatusesAreImmutableSnapshots();
+         runtimeStateRoundsElapsedTimeAndHandlesClockSkew();
++        queryFailureClearsShortageTimingAndDoesNotAlert();
++        recoveredShortageAfterQueryFailureStartsTimingAgain();
++        recoveredHealthyGroupAfterQueryFailureReturnsNormal();
+         System.out.println("GroupMonitorLogicTest PASS");
+     }
+
+@@ -227,6 +230,74 @@ public final class GroupMonitorLogicTest {
+                 "minutes should round up");
+     }
+
++    private static void queryFailureClearsShortageTimingAndDoesNotAlert() {
++        PointGroupDefinition group = defaultGroup(3, 5);
++        GroupRuntimeState state = new GroupRuntimeState();
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME.plusMinutes(4));
++
++        GroupEvaluation failed = GroupMonitorLogic.queryFailed(
++                group,
++                state,
++                BASE_TIME.plusMinutes(5),
++                "查询失败：连接超时");
++
++        TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, failed.status(),
++                "query failure should have an independent status");
++        TestSupport.assertFalse(failed.ruleMatched(), "query failure must not match shortage rule");
++        TestSupport.assertFalse(failed.shouldShowDialog(), "query failure must not show shortage dialog");
++        TestSupport.assertEquals(0, failed.continuousMatchedSeconds(),
++                "query failure should not keep previous shortage seconds");
++        TestSupport.assertEquals(null, state.conditionFirstMatchedAt(),
++                "query failure should clear previous shortage start time");
++        TestSupport.assertEquals(BASE_TIME.plusMinutes(5), state.lastCheckedAt(),
++                "query failure should still update last checked time");
++        TestSupport.assertContains(failed.message(), "查询失败", "failure message should be operator visible");
++        TestSupport.assertNotContains(failed.message(), "EMPTY", "failure message must not look like material state");
++        TestSupport.assertNotContains(failed.message(), "ACTIVE_ALERT", "failure message must not leak alert enum");
++    }
++
++    private static void recoveredShortageAfterQueryFailureStartsTimingAgain() {
++        PointGroupDefinition group = defaultGroup(3, 5);
++        GroupRuntimeState state = new GroupRuntimeState();
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME.plusMinutes(4));
++        GroupMonitorLogic.queryFailed(group, state, BASE_TIME.plusMinutes(5), "查询失败：连接超时");
++
++        GroupEvaluation recoveredButStillShortage = GroupMonitorLogic.evaluate(
++                group,
++                shortageRecords(),
++                state,
++                BASE_TIME.plusMinutes(6));
++
++        TestSupport.assertEquals(GroupAlertStatus.PENDING_ALERT, recoveredButStillShortage.status(),
++                "shortage after query recovery should start pending again");
++        TestSupport.assertEquals(0, recoveredButStillShortage.continuousMatchedSeconds(),
++                "shortage timing must restart after query recovery");
++        TestSupport.assertFalse(recoveredButStillShortage.shouldShowDialog(),
++                "recovered first shortage check must not alert immediately");
++    }
++
++    private static void recoveredHealthyGroupAfterQueryFailureReturnsNormal() {
++        PointGroupDefinition group = defaultGroup(3, 5);
++        GroupRuntimeState state = new GroupRuntimeState();
++        GroupMonitorLogic.evaluate(group, shortageRecords(), state, BASE_TIME);
++        GroupMonitorLogic.queryFailed(group, state, BASE_TIME.plusMinutes(1), "查询失败：连接超时");
++
++        GroupEvaluation healthy = GroupMonitorLogic.evaluate(group, List.of(
++                record("USE_POINT_001", "SHELF_USE_001", 1, 0),
++                record("BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0),
++                record("BACKUP_POINT_002", "SHELF_BACKUP_002", 1, 0),
++                record("BACKUP_POINT_003", "SHELF_BACKUP_003", 1, 0),
++                record("BACKUP_POINT_004", "", 1, 0)), state, BASE_TIME.plusMinutes(2));
++
++        TestSupport.assertEquals(GroupAlertStatus.NORMAL, healthy.status(),
++                "healthy query recovery should return normal");
++        TestSupport.assertEquals(0, healthy.continuousMatchedSeconds(),
++                "healthy recovery should not have shortage timing");
++        TestSupport.assertFalse(healthy.shouldShowDialog(), "healthy recovery should not show dialog");
++    }
++
+     private static PointGroupDefinition defaultGroup(int minBackupAvailable, int durationMinutes) {
+         return defaultGroup(minBackupAvailable, durationMinutes,
+                 new GroupAlertRule(true, true, minBackupAvailable, durationMinutes));
+diff --git a/test/com/local/monitor/ShelfPointMonitorAppUiTest.java b/test/com/local/monitor/ShelfPointMonitorAppUiTest.java
+index 856402e..d1d1235 100644
+--- a/test/com/local/monitor/ShelfPointMonitorAppUiTest.java
++++ b/test/com/local/monitor/ShelfPointMonitorAppUiTest.java
+@@ -25,6 +25,7 @@ import javax.swing.AbstractButton;
+ import javax.swing.JButton;
+ import javax.swing.JCheckBox;
+ import javax.swing.JComponent;
++import javax.swing.JDialog;
+ import javax.swing.JLabel;
+ import javax.swing.JList;
+ import javax.swing.JPanel;
+@@ -49,6 +50,10 @@ public final class ShelfPointMonitorAppUiTest {
+         capturedMonitoredGroupsIgnoreLaterFormChanges();
+         manualCheckUsesGroupSnapshotCapturedOnEdt();
+         groupFetchFailureMarksCheckedAndContinues();
++        groupFetchFailureUpdatesSelectedDashboardWithChineseStatus();
++        queryFailureClosesActiveDialogForSameGroupOnly();
++        queryFailureDoesNotCloseDialogForOtherGroup();
++        queryFailureEventsAreDeduplicatedAndSanitized();
+         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
+         gridBagPanelsDoNotOverlapCells();
+         groupStatusTextUsesOperatorChinese();
+@@ -381,17 +386,21 @@ public final class ShelfPointMonitorAppUiTest {
+                     "successful group should also be marked checked");
+             TestSupport.assertEquals(1, result.checkedGroups(), "successful group should still be processed");
+             TestSupport.assertEquals(1, result.failedGroups(), "failed group should be counted");
+-            TestSupport.assertEquals(1, result.evaluations().size(),
+-                    "failed fetch should not create a group evaluation");
+-            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(0).groupId(),
+-                    "only the successful group should be evaluated");
++            TestSupport.assertEquals(2, result.evaluations().size(),
++                    "failed fetch should create a visible query failure evaluation");
++            TestSupport.assertEquals(failingGroup.id(), result.evaluations().get(0).groupId(),
++                    "failed group should be evaluated first");
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
++                    "failed group should use independent query failure status");
++            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(1).groupId(),
++                    "successful group should still be evaluated");
+             TestSupport.assertFalse(result.dialogRequested(), "failed fetch should not request a dialog");
+
+             @SuppressWarnings("unchecked")
+             Map<String, GroupAlertStatus> statuses =
+                     (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+-            TestSupport.assertFalse(statuses.containsKey(failingGroup.id()),
+-                    "failed group should not update last alert status without an evaluation");
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, statuses.get(failingGroup.id()),
++                    "failed group should update last status to query failed");
+             TestSupport.assertEquals(GroupAlertStatus.NORMAL, statuses.get(healthyGroup.id()),
+                     "successful healthy group should update its last status");
+         } finally {
+@@ -400,6 +409,173 @@ public final class ShelfPointMonitorAppUiTest {
+         }
+     }
+
++    private static void groupFetchFailureUpdatesSelectedDashboardWithChineseStatus() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        PointGroupDefinition group = group("group-query-failed", 60);
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            setField(appRef[0], "pointGroups", new ArrayList<>(List.of(group)));
++            invoke(appRef[0], "refreshGroupList", new Class<?>[] {String.class}, group.id());
++            invoke(appRef[0], "populateSelectedGroup", new Class<?>[0]);
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
++                    List.of(group),
++                    LocalDateTime.of(2026, 7, 3, 10, 20),
++                    "test",
++                    ignored -> {
++                        throw new IllegalStateException("connection timeout");
++                    });
++            runOnEdtAndWait(() -> {
++                JLabel summary = fieldValue(app, "groupSummaryLabel", JLabel.class);
++                String text = summary.getText();
++                TestSupport.assertContains(text, "查询失败", "dashboard should show query failure in Chinese");
++                TestSupport.assertContains(text, "connection timeout", "dashboard should show sanitized error summary");
++                assertNoTechnicalGroupText(text, "query failure dashboard");
++            });
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
++                    "result should expose query failure status");
++            TestSupport.assertFalse(result.dialogRequested(), "query failure should not show shortage dialog");
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
++    private static void queryFailureClosesActiveDialogForSameGroupOnly() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        Path logDir = Files.createTempDirectory("query-failure-dialog-test");
++        PointGroupDefinition group = group("group-dialog-a", 60);
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            setField(appRef[0], "groupLogWriter", new GroupLogWriter(logDir));
++            setField(appRef[0], "logPath", logDir.resolve("monitor.log"));
++            setField(appRef[0], "activeDialog", new JDialog(appRef[0], "active A"));
++            setField(appRef[0], "activeDialogGroupId", group.id());
++            @SuppressWarnings("unchecked")
++            Map<String, GroupAlertStatus> statuses =
++                    (Map<String, GroupAlertStatus>) fieldValue(appRef[0], "lastGroupStatuses", Map.class);
++            statuses.put(group.id(), GroupAlertStatus.ACTIVE_ALERT);
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
++                    List.of(group),
++                    LocalDateTime.of(2026, 7, 3, 10, 30),
++                    "test",
++                    ignored -> {
++                        throw new IllegalStateException("connection timeout");
++                    });
++            runOnEdtAndWait(() -> {
++                TestSupport.assertEquals(null, fieldValue(app, "activeDialog", JDialog.class),
++                        "query failure should clear active dialog for the same group");
++                TestSupport.assertEquals("", fieldValue(app, "activeDialogGroupId", String.class),
++                        "query failure should clear active dialog group id");
++            });
++
++            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
++                    "same group failure should be a query failure evaluation");
++            List<String> eventRows = Files.readAllLines(logDir.resolve("event-log.csv"));
++            String eventLog = String.join("\n", eventRows);
++            TestSupport.assertContains(eventLog, "QUERY_FAILED", "query failure event should be written");
++            TestSupport.assertNotContains(eventLog, "ACKNOWLEDGED",
++                    "closing stale dialog must not acknowledge the alert");
++            TestSupport.assertNotContains(eventLog, "RECOVERED",
++                    "query failure must not be logged as recovered");
++            TestSupport.assertNotContains(eventLog, "ALERT_OPEN",
++                    "query failure must not open a new shortage alert");
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
++    private static void queryFailureDoesNotCloseDialogForOtherGroup() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        PointGroupDefinition failingGroup = group("group-dialog-a", 60);
++        PointGroupDefinition dialogGroup = group("group-dialog-b", 60);
++        JDialog[] dialogRef = new JDialog[1];
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            dialogRef[0] = new JDialog(appRef[0], "active B");
++            setField(appRef[0], "activeDialog", dialogRef[0]);
++            setField(appRef[0], "activeDialogGroupId", dialogGroup.id());
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            app.checkGroupsWithFetcher(
++                    List.of(failingGroup),
++                    LocalDateTime.of(2026, 7, 3, 10, 31),
++                    "test",
++                    ignored -> {
++                        throw new IllegalStateException("connection timeout");
++                    });
++            runOnEdtAndWait(() -> {
++                TestSupport.assertEquals(dialogRef[0], fieldValue(app, "activeDialog", JDialog.class),
++                        "query failure must not close another group's dialog");
++                TestSupport.assertEquals(dialogGroup.id(), fieldValue(app, "activeDialogGroupId", String.class),
++                        "other group's active dialog ownership should stay unchanged");
++            });
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
++    private static void queryFailureEventsAreDeduplicatedAndSanitized() throws Exception {
++        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
++        Path logDir = Files.createTempDirectory("query-failure-log-test");
++        PointGroupDefinition group = group("group-query-log", 60);
++        runOnEdtAndWait(() -> {
++            appRef[0] = new ShelfPointMonitorApp();
++            setField(appRef[0], "groupLogWriter", new GroupLogWriter(logDir));
++            setField(appRef[0], "logPath", logDir.resolve("monitor.log"));
++        });
++        try {
++            ShelfPointMonitorApp app = appRef[0];
++            List<String> unsafeMessages = List.of(
++                    "FATAL: password authentication failed for user \"readonly_user\"",
++                    "Access denied for user 'readonly_user'@'192.0.2.10'",
++                    "role \"readonly_user\" does not exist",
++                    "uid=readonly_user password=Secret-123",
++                    "jdbc:postgresql://192.0.2.10:2345/cms_web?user=readonly_user&password=Secret-123",
++                    "at com.local.monitor.PointRepository.fetch(PointRepository.java:24)");
++            for (int i = 0; i < unsafeMessages.size(); i++) {
++                String unsafeMessage = unsafeMessages.get(i);
++                app.checkGroupsWithFetcher(
++                        List.of(group),
++                        LocalDateTime.of(2026, 7, 3, 10, 20).plusMinutes(i),
++                        "test",
++                        ignored -> {
++                            throw new IllegalStateException(unsafeMessage);
++                        });
++            }
++            app.checkGroupsWithFetcher(
++                    List.of(group),
++                    LocalDateTime.of(2026, 7, 3, 10, 40),
++                    "test",
++                    ignored -> healthyRecords());
++
++            List<String> checkRows = Files.readAllLines(logDir.resolve("check-log.csv"));
++            List<String> eventRows = Files.readAllLines(logDir.resolve("event-log.csv"));
++            List<String> monitorRows = Files.readAllLines(logDir.resolve("monitor.log"));
++            TestSupport.assertEquals(unsafeMessages.size() + 2, checkRows.size(),
++                    "each actual check should write one check row plus header");
++            TestSupport.assertEquals(3, eventRows.size(),
++                    "continuous failures should only write first failure and recovery events");
++            TestSupport.assertContains(eventRows.get(1), "QUERY_FAILED", "first event should mark query failure");
++            TestSupport.assertContains(eventRows.get(2), "QUERY_RECOVERED", "second event should mark query recovery");
++
++            assertSanitizedQueryFailureLog(String.join("\n", checkRows), "check-log.csv");
++            assertSanitizedQueryFailureLog(String.join("\n", eventRows), "event-log.csv");
++            assertSanitizedQueryFailureLog(String.join("\n", monitorRows), "monitor.log");
++        } finally {
++            shutdownExecutor(appRef[0]);
++            runOnEdtAndWait(() -> appRef[0].dispose());
++        }
++    }
++
+     private static void checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush() throws Exception {
+         ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+         PointGroupDefinition group = group("group-dashboard", 60);
+@@ -491,6 +667,8 @@ public final class ShelfPointMonitorAppUiTest {
+                 "active status should be operator Chinese");
+         TestSupport.assertEquals("已关注", GroupStatusText.statusText(GroupAlertStatus.ACKED_ALERT),
+                 "acknowledged status should be operator Chinese");
++        TestSupport.assertEquals("查询失败", GroupStatusText.statusText(GroupAlertStatus.QUERY_FAILED),
++                "query failure status should be operator Chinese");
+
+         for (GroupAlertStatus status : GroupAlertStatus.values()) {
+             String text = GroupStatusText.statusText(status);
+@@ -1027,11 +1205,22 @@ public final class ShelfPointMonitorAppUiTest {
+         TestSupport.assertNotContains(text, "PENDING_ALERT", context + " should not leak pending enum");
+         TestSupport.assertNotContains(text, "ACTIVE_ALERT", context + " should not leak active enum");
+         TestSupport.assertNotContains(text, "ACKED_ALERT", context + " should not leak acknowledged enum");
++        TestSupport.assertNotContains(text, "QUERY_FAILED", context + " should not leak query failure enum");
+         TestSupport.assertNotContains(text, "useEmpty=", context + " should not leak debug use point field");
+         TestSupport.assertNotContains(text, "backup=", context + " should not leak debug backup field");
+         TestSupport.assertNotContains(text, "continuous=", context + " should not leak debug duration field");
+     }
+
++    private static void assertSanitizedQueryFailureLog(String text, String context) {
++        TestSupport.assertContains(text, "查询失败", context + " should retain useful failure category");
++        TestSupport.assertNotContains(text, "readonly_user", context + " must not contain database username");
++        TestSupport.assertNotContains(text, "Secret-123", context + " must not contain password");
++        TestSupport.assertNotContains(text, "jdbc:postgresql://192.0.2.10:2345/cms_web",
++                context + " must not contain full JDBC URL");
++        TestSupport.assertNotContains(text, "PointRepository.java:24",
++                context + " must not contain stack trace location");
++    }
++
+     private static void collectVisibleTexts(Component component, Set<String> texts) {
+         if (component instanceof JLabel) {
+             texts.add(((JLabel) component).getText());

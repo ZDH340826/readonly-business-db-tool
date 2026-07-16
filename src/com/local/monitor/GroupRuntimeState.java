@@ -77,6 +77,11 @@ public final class GroupRuntimeState {
         activeDialogShown = true;
     }
 
+    void markQueryFailed(LocalDateTime checkedAt) {
+        reset();
+        lastCheckedAt = checkedAt;
+    }
+
     void reset() {
         conditionFirstMatchedAt = null;
         conditionLastMatchedAt = null;

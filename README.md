@@ -1,6 +1,6 @@
 # 只读业务数据库工具
 
-当前版本：`0.4.0`
+当前版本：`0.5.0-rc.1`
 
 这是一个 Windows 本地 Java Swing 只读数据库工具，用于只读查看业务数据库，并按区域/物料组监控点位缺料风险。它不是通用数据库客户端替代品，不提供 SQL 编辑器，不提供任何数据修改功能。
 
@@ -10,13 +10,15 @@
 - 密码策略：密码只在本次运行中输入和使用，不保存到配置文件。
 - 数据库浏览器：只读查看 schema、table/view、column，并预览前 100 行。
 - 点位状态看板：直接展示每个点位的 `有料`、`无料`、`未查到`、`停用` 状态。
-- 点位组缺料报警：按区域、物料组配置 1 个使用位和多个备用位。
-- 分组规则：每个点位组独立配置使用位、备用位、备用位下限和是否参与报警判断。
+- 点位组缺料报警：按区域、物料组配置 1 个或多个使用位，以及多个备用位。
+- 分组规则：任一启用使用位无料或未查到时，使用位条件成立；再结合备用位下限和持续时间决定是否报警。
 - 每组检测周期：不同点位组可以设置不同查询周期，自动监控只检测到期组。
 - 持续缺料报警：报警持续时间和检测周期分开配置，按真实经过时间判断是否弹窗。
 - 报警确认：报警窗口必须手动点击“已关注”才会关闭。
 - 日志系统：记录每次检测快照和报警/确认/恢复事件。
 - 本地测试库：无需连接现场数据库即可验证界面、浏览器和报警逻辑。
+- 八页工作台：监控总览、点位组管理、报警中心、连接管理、数据查询、数据源浏览器、日志与系统、系统设置。
+- 现场交付：内嵌 Java 运行时、中文启动/预检/诊断脚本、脱敏诊断包和中文验收/回滚文档。
 
 ## 只读边界
 
@@ -43,13 +45,14 @@ SET TRANSACTION READ ONLY;
 
 ```powershell
 .\build.ps1
-.\dist\ShelfPointMonitor\ShelfPointMonitor.bat
+.\dist\ShelfPointMonitor\启动工具.bat
+.\dist\ShelfPointMonitor\现场部署检查.bat
 ```
 
 构建脚本会读取根目录 `VERSION`，生成版本化压缩包：
 
 ```text
-dist/ReadonlyBusinessDbTool-v0.4.0.zip
+dist/ReadonlyBusinessDbTool-v0.5.0-rc.1.zip
 ```
 
 ## 现场连接配置
@@ -76,8 +79,8 @@ dist/ReadonlyBusinessDbTool-v0.4.0.zip
 | 数据库字段 | 软件内部含义 |
 |---|---|
 | `cms_web.public.tcs_map_data` | 点位状态来源表 |
-| `map_data_code` | 点位编码 |
-| `pod_code` | 货架编号 |
+| `map_data_code` | 地码 |
+| `pod_code` | 货码 |
 | `pod_status` | 货架状态 |
 | `status` | 点位状态 |
 | `ind_lock` | 锁定状态 |
@@ -89,27 +92,31 @@ dist/ReadonlyBusinessDbTool-v0.4.0.zip
 
 ## 默认样例
 
-默认本地测试库和点位组使用公开样例数据：
+默认本地 H2 含 33 行公开虚构数据和 8 个点位组，启动后可直接浏览：
 
-- 使用位：`USE_POINT_001`
-- 备用位：`BACKUP_POINT_001`
-- 备用位：`BACKUP_POINT_002`
-- 备用位：`BACKUP_POINT_003`
-- 备用位：`BACKUP_POINT_004`
+| 场景 | 用途 |
+|---|---|
+| 双口任一无料 | 两个使用位中一个有料、一个无料，备用位不足 |
+| 使用位全部有料 | 备用位不足，但使用位条件不成立 |
+| 备用位数量充足 | 使用位无料，但备用位刚好或超过下限 |
+| 状态异常与锁定 | 展示状态异常、锁定原因 |
+| 含停用点位 | 展示停用点位不参与计数 |
+| 数据库未查到地码 | 展示配置存在但查询无记录 |
+| 全部正常 | 展示健康状态 |
+| 刚好达到备用下限 | 展示“等于下限不算不足” |
 
-默认规则：
+第一个场景包含 `USE_POINT_001`、`USE_POINT_002` 两个使用位和 4 个备用位。默认每分钟检测，条件持续 1 分钟后报警。所有演示数据只写入本地 H2，`LocalTestDatabase` 会拒绝任何非本地数据库配置。
 
-- 每 1 分钟检测一次该点位组。
-- 使用位无货架。
-- 4 个备用位中至少 3 个需要有货架。
-- 备用位有料下限参与报警判断。
-- 条件持续 5 分钟后报警。
+本版本支持数据查询结果 CSV 导出，但尚未提供“点位组 CSV 导入/导出”。点位组 CSV 模板和导入校验属于下一阶段，不能把当前模板误认为已经可在界面导入。
 
 ## 文档
 
 - 使用说明书：[docs/manuals/point-shortage-alert-user-manual.md](docs/manuals/point-shortage-alert-user-manual.md)
+- 现场运维交付手册：[docs/manuals/现场运维交付手册.md](docs/manuals/现场运维交付手册.md)
+- 现场验收清单：[docs/ops/现场验收清单.md](docs/ops/现场验收清单.md)
+- 回滚说明：[docs/ops/回滚说明.md](docs/ops/回滚说明.md)
 - 版本策略：[docs/VERSIONING.md](docs/VERSIONING.md)
-- 发布说明：[docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)
+- 发布说明：[docs/releases/v0.5.0-rc.1.md](docs/releases/v0.5.0-rc.1.md)
 
 ## 版本
 

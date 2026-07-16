@@ -118,8 +118,8 @@ public final class PointGroupDefinition {
                 backupCount++;
             }
         }
-        if (useCount != 1) {
-            throw new IllegalArgumentException("enabled group must contain exactly one use point");
+        if (useCount < 1) {
+            throw new IllegalArgumentException("enabled group must contain at least one use point");
         }
         if (backupCount < 1) {
             throw new IllegalArgumentException("enabled group must contain at least one backup point");

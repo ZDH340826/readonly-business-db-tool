@@ -26,12 +26,14 @@ public final class LocalTestDatabase {
         try (Connection conn = DriverManager.getConnection(config.jdbcUrl(), "sa", "")) {
             if ("normal".equalsIgnoreCase(scenario)) {
                 updatePod(conn, "USE_POINT_001", "SHELF_USE_001");
+                updatePod(conn, "USE_POINT_002", "SHELF_USE_002");
                 updatePod(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001");
                 updatePod(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002");
                 updatePod(conn, "BACKUP_POINT_003", "SHELF_BACKUP_003");
                 updatePod(conn, "BACKUP_POINT_004", "SHELF_BACKUP_004");
             } else if ("missing-use".equalsIgnoreCase(scenario)) {
                 updatePod(conn, "USE_POINT_001", null);
+                updatePod(conn, "USE_POINT_002", null);
                 updatePod(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001");
                 updatePod(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002");
                 updatePod(conn, "BACKUP_POINT_003", null);
@@ -78,25 +80,22 @@ public final class LocalTestDatabase {
     }
 
     private static void insertDefaultPoints(Connection conn) throws Exception {
-        insertPoint(conn, "USE_POINT_001", null, 1, 0, "AREA_USE", "AREA_BUFFER");
-        insertPoint(conn, "BACKUP_POINT_001", "SHELF_BACKUP_001", 1, 0, "AREA_BUFFER", "AREA_NEXT");
-        insertPoint(conn, "BACKUP_POINT_002", "SHELF_BACKUP_002", 1, 0, "AREA_BUFFER", "AREA_NEXT");
-        insertPoint(conn, "BACKUP_POINT_003", null, 1, 0, "AREA_BUFFER", "AREA_NEXT");
-        insertPoint(conn, "BACKUP_POINT_004", null, 1, 0, "AREA_BUFFER", "AREA_NEXT");
+        for (LocalDemoCatalog.DatabaseRow row : LocalDemoCatalog.databaseRows()) {
+            insertPoint(conn, row);
+        }
     }
 
-    private static void insertPoint(Connection conn, String code, String podCode, int status, int indLock,
-            String areaCode, String relateAreaCode) throws Exception {
+    private static void insertPoint(Connection conn, LocalDemoCatalog.DatabaseRow row) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement("insert into public.tcs_map_data "
                 + "(map_data_code,pod_code,pod_status,status,ind_lock,area_code,relate_area_code,date_chg) "
                 + "values (?,?,?,?,?,?,?,current_timestamp)")) {
-            ps.setString(1, code);
-            ps.setString(2, podCode);
-            ps.setString(3, "0");
-            ps.setInt(4, status);
-            ps.setInt(5, indLock);
-            ps.setString(6, areaCode);
-            ps.setString(7, relateAreaCode);
+            ps.setString(1, row.code());
+            ps.setString(2, row.podCode());
+            ps.setString(3, row.podStatus());
+            ps.setInt(4, row.status());
+            ps.setInt(5, row.lock());
+            ps.setString(6, row.areaCode());
+            ps.setString(7, row.relateAreaCode());
             ps.executeUpdate();
         }
     }
@@ -116,4 +115,3 @@ public final class LocalTestDatabase {
         }
     }
 }
-

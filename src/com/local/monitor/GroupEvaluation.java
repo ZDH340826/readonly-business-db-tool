@@ -1,5 +1,6 @@
 package com.local.monitor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class GroupEvaluation {
@@ -134,6 +135,36 @@ public final class GroupEvaluation {
 
     public List<PointStatusView> pointStatuses() {
         return pointStatuses;
+    }
+
+    public int usePointTotal() {
+        int total = 0;
+        for (PointStatusView point : pointStatuses) {
+            if (point.enabled() && point.role() == PointRole.USE) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    public int usePointAvailableCount() {
+        int available = 0;
+        for (PointStatusView point : pointStatuses) {
+            if (point.enabled() && point.role() == PointRole.USE && point.available()) {
+                available++;
+            }
+        }
+        return available;
+    }
+
+    public List<PointStatusView> unavailableUsePoints() {
+        List<PointStatusView> unavailable = new ArrayList<>();
+        for (PointStatusView point : pointStatuses) {
+            if (point.enabled() && point.role() == PointRole.USE && !point.available()) {
+                unavailable.add(point);
+            }
+        }
+        return List.copyOf(unavailable);
     }
 
     public int continuousMatchedMinutes() {

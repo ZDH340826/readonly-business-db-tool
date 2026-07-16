@@ -1,7 +1,9 @@
 package com.local.monitor;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics2D;
 import java.io.IOException;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -11,6 +13,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -25,18 +28,25 @@ import javax.swing.AbstractButton;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JComboBox;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTable;
+import javax.swing.UIManager;
 import javax.swing.text.JTextComponent;
 import javax.swing.SwingUtilities;
 import javax.swing.border.TitledBorder;
 
 public final class ShelfPointMonitorAppUiTest {
     public static void main(String[] args) throws Exception {
-        appHasThreeNavigationPages();
+        appHasFinalNavigationPages();
+        finalNavigationPagesCanSwitchAndAreNotBlank();
+        finalShellHasRequiredStatusBarsAndSize();
+        finalLayoutsExposeAcceptanceStructure();
         connectionPageUsesChineseOperatorLabels();
         alertPageContainsGroupPointTable();
         groupCheckIntervalFieldExists();
@@ -44,13 +54,24 @@ public final class ShelfPointMonitorAppUiTest {
         updateSelectedGroupFromFormPreservesCustomInterval();
         updateSelectedGroupFromFormSavesBackupThresholdParticipation();
         populateSelectedGroupRoundsPartialMinutesUp();
+        pointRolesUseChineseAndRoundTripMultipleUsePoints();
         renderPointStatusBoardShowsMaterialStates();
         renderPointStatusBoardDoesNotOverlapWhenBackupsPrecedeUse();
         capturedMonitoredGroupsIgnoreLaterFormChanges();
         manualCheckUsesGroupSnapshotCapturedOnEdt();
         groupFetchFailureMarksCheckedAndContinues();
+        groupFetchFailureUpdatesSelectedDashboardWithChineseStatus();
+        queryFailureClosesActiveDialogForSameGroupOnly();
+        queryFailureDoesNotCloseDialogForOtherGroup();
+        stoppingMonitoringClosesOldDialogWithoutAcknowledging();
+        queryFailureEventsAreDeduplicatedAndSanitized();
+        recoveredFilterDoesNotShowNeverAlertedNormalGroup();
+        alertCenterActionsUseGroupIdWhenNamesCollide();
         checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush();
         gridBagPanelsDoNotOverlapCells();
+        buttonsPaintReadableColorsAcrossEveryPage();
+        standardTablesUseReadableScrollPanesAcrossEveryPage();
+        dataSourcePreviewUsesOperatorFriendlyImportantColumnHeaders();
         groupStatusTextUsesOperatorChinese();
         groupSummaryDoesNotExposeTechnicalFields();
         groupAlertTextsDoNotExposeTechnicalStatusNames();
@@ -60,16 +81,90 @@ public final class ShelfPointMonitorAppUiTest {
         System.out.println("ShelfPointMonitorAppUiTest PASS");
     }
 
-    private static void appHasThreeNavigationPages() throws Exception {
+    private static void appHasFinalNavigationPages() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
             try {
                 JList<?> navigation = findFirst(app.getContentPane(), JList.class);
                 TestSupport.assertTrue(navigation != null, "app should have a navigation list");
-                TestSupport.assertEquals(3, navigation.getModel().getSize(), "app should have three navigation pages");
-                TestSupport.assertEquals("连接管理", navigation.getModel().getElementAt(0), "first page should be connection management");
-                TestSupport.assertEquals("数据库浏览器", navigation.getModel().getElementAt(1), "second page should be database browser");
-                TestSupport.assertEquals("点位缺料报警", navigation.getModel().getElementAt(2), "third page should be point alert");
+                List<String> expected = List.of(
+                        "监控总览",
+                        "点位组管理",
+                        "报警中心",
+                        "连接管理",
+                        "数据查询",
+                        "数据源浏览器",
+                        "日志与系统",
+                        "系统设置");
+                TestSupport.assertEquals(expected.size(), navigation.getModel().getSize(),
+                        "app should have eight final navigation pages");
+                for (int i = 0; i < expected.size(); i++) {
+                    TestSupport.assertEquals(expected.get(i), navigation.getModel().getElementAt(i),
+                            "navigation item order should match final UI spec at index " + i);
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void finalNavigationPagesCanSwitchAndAreNotBlank() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                String[] requiredTexts = {
+                        "监控点位组",
+                        "验证配置",
+                        "活跃报警",
+                        "数据库访问模式：只读",
+                        "地码关键字：",
+                        "预览前100行",
+                        "执行自检",
+                        "保存设置"
+                };
+                for (int i = 0; i < navigation.getModel().getSize(); i++) {
+                    navigation.setSelectedIndex(i);
+                    Set<String> texts = collectVisibleTexts(app.getContentPane());
+                    TestSupport.assertTrue(texts.contains(requiredTexts[i]),
+                            "page should expose real visible content for " + navigation.getModel().getElementAt(i));
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void finalShellHasRequiredStatusBarsAndSize() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                TestSupport.assertTrue(app.getMinimumSize().width >= 1180, "minimum width should be at least 1180");
+                TestSupport.assertTrue(app.getMinimumSize().height >= 760, "minimum height should be at least 760");
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("监控状态：未运行"), "top status bar should show monitor status");
+                TestSupport.assertTrue(texts.contains("上次检测：--"), "top status bar should show last check");
+                TestSupport.assertTrue(texts.contains("下次检测：--"), "top status bar should show next check");
+                TestSupport.assertTrue(texts.contains("就绪"), "bottom status bar should show runtime status");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void finalLayoutsExposeAcceptanceStructure() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                Set<String> texts = collectVisibleTexts(app.getContentPane());
+                TestSupport.assertTrue(texts.contains("基本信息"), "group management should expose basic info panel");
+                TestSupport.assertTrue(texts.contains("报警规则"), "group management should expose rule panel");
+                TestSupport.assertTrue(texts.contains("Schema / 表 / 视图对象树"),
+                        "browser should expose object tree panel");
+                TestSupport.assertTrue(texts.contains("对象元数据与列信息"),
+                        "browser should expose metadata panel");
+                TestSupport.assertTrue(texts.contains("前 100 行只读预览"),
+                        "browser should expose preview panel");
             } finally {
                 app.dispose();
             }
@@ -85,6 +180,132 @@ public final class ShelfPointMonitorAppUiTest {
                 app.dispose();
             }
         });
+    }
+
+    private static void buttonsPaintReadableColorsAcrossEveryPage() throws Exception {
+        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        AppTheme.install();
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                TestSupport.assertTrue(navigation != null, "button audit requires the final navigation list");
+                for (int page = 0; page < navigation.getModel().getSize(); page++) {
+                    navigation.setSelectedIndex(page);
+                    List<JButton> buttons = new ArrayList<>();
+                    collectVisibleButtons(app.getContentPane(), buttons);
+                    String pageName = String.valueOf(navigation.getModel().getElementAt(page));
+                    TestSupport.assertTrue(!buttons.isEmpty(), pageName + " should expose at least one action button");
+                    for (JButton button : buttons) {
+                        assertButtonPaintsReadableColors(button, pageName);
+                    }
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void assertButtonPaintsReadableColors(JButton button, String pageName) {
+        String text = button.getText();
+        TestSupport.assertTrue(text != null && !text.isBlank(), pageName + " contains an unlabeled button");
+        int width = Math.max(80, button.getPreferredSize().width);
+        int height = Math.max(36, button.getPreferredSize().height);
+        button.setSize(width, height);
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            button.paint(graphics);
+        } finally {
+            graphics.dispose();
+        }
+        Color paintedBackground = new Color(image.getRGB(Math.max(2, width - 8), height / 2), true);
+        Color configuredBackground = button.getBackground();
+        int paintDifference = Math.abs(paintedBackground.getRed() - configuredBackground.getRed())
+                + Math.abs(paintedBackground.getGreen() - configuredBackground.getGreen())
+                + Math.abs(paintedBackground.getBlue() - configuredBackground.getBlue());
+        TestSupport.assertTrue(paintDifference <= 30,
+                pageName + " / " + text + " should paint its configured background; configured="
+                        + configuredBackground + " painted=" + paintedBackground);
+
+        Color textColor = button.isEnabled() ? button.getForeground() : UIManager.getColor("Button.disabledText");
+        TestSupport.assertTrue(textColor != null, pageName + " / " + text + " must define a text color");
+        double contrast = contrastRatio(textColor, configuredBackground);
+        TestSupport.assertTrue(contrast >= 4.5d,
+                pageName + " / " + text + " text must remain readable; contrast=" + contrast);
+    }
+
+    private static void standardTablesUseReadableScrollPanesAcrossEveryPage() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                JList<?> navigation = findFirst(app.getContentPane(), JList.class);
+                TestSupport.assertTrue(navigation != null, "table audit requires the final navigation list");
+                for (int page = 0; page < navigation.getModel().getSize(); page++) {
+                    navigation.setSelectedIndex(page);
+                    String pageName = String.valueOf(navigation.getModel().getElementAt(page));
+                    List<JTable> tables = new ArrayList<>();
+                    collectVisibleTables(app.getContentPane(), tables);
+                    for (JTable table : tables) {
+                        Component ancestor = SwingUtilities.getAncestorOfClass(JScrollPane.class, table);
+                        TestSupport.assertTrue(ancestor instanceof ReadableTableScrollPane,
+                                pageName + " / standard data table must support horizontal browsing");
+                    }
+                }
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void dataSourcePreviewUsesOperatorFriendlyImportantColumnHeaders() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                javax.swing.table.DefaultTableModel previewModel = fieldValue(
+                        app, "previewModel", javax.swing.table.DefaultTableModel.class);
+                previewModel.setColumnIdentifiers(new Object[] {
+                        "status", "map_data_code", "pod_code", "date_chg"
+                });
+                DataSourceBrowserPage page = fieldValue(
+                        app, "dataSourceBrowserPage", DataSourceBrowserPage.class);
+                page.previewLoaded("public", "tcs_map_data");
+
+                PinnedTablePane previewPane = findFirst(app.getContentPane(), PinnedTablePane.class);
+                TestSupport.assertTrue(previewPane != null,
+                        "browser preview must use the fixed-column component");
+                JTable scrollingTable = findFirst(previewPane, JTable.class);
+                TestSupport.assertTrue(scrollingTable != null,
+                        "browser preview must retain its scrolling table");
+                String headers = java.util.stream.IntStream.range(0, scrollingTable.getColumnCount())
+                        .mapToObj(index -> String.valueOf(
+                                scrollingTable.getColumnModel().getColumn(index).getHeaderValue()))
+                        .collect(java.util.stream.Collectors.joining(" "));
+                TestSupport.assertTrue(headers.contains("地码") && headers.contains("map_data_code"),
+                        "map_data_code header must explain the agreed land-code term");
+                TestSupport.assertTrue(headers.contains("货码") && headers.contains("pod_code"),
+                        "pod_code header must explain the operator-facing cargo-code term");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static double contrastRatio(Color first, Color second) {
+        double light = Math.max(relativeLuminance(first), relativeLuminance(second));
+        double dark = Math.min(relativeLuminance(first), relativeLuminance(second));
+        return (light + 0.05d) / (dark + 0.05d);
+    }
+
+    private static double relativeLuminance(Color color) {
+        double red = linearColor(color.getRed() / 255.0d);
+        double green = linearColor(color.getGreen() / 255.0d);
+        double blue = linearColor(color.getBlue() / 255.0d);
+        return 0.2126d * red + 0.7152d * green + 0.0722d * blue;
+    }
+
+    private static double linearColor(double value) {
+        return value <= 0.04045d ? value / 12.92d : Math.pow((value + 0.055d) / 1.055d, 2.4d);
     }
 
     private static void connectionPageUsesChineseOperatorLabels() throws Exception {
@@ -103,7 +324,7 @@ public final class ShelfPointMonitorAppUiTest {
                 TestSupport.assertTrue(texts.contains("密码："), "connection page should show Chinese password label");
                 TestSupport.assertTrue(texts.contains("SSL模式："), "connection page should show Chinese SSL label");
                 TestSupport.assertTrue(texts.contains("新建连接"), "connection page should show Chinese new button");
-                TestSupport.assertTrue(texts.contains("测试连接并使用"), "connection page should show Chinese test button");
+                TestSupport.assertTrue(texts.contains("测试连接"), "connection page should show Chinese test button");
             } finally {
                 app.dispose();
             }
@@ -148,6 +369,8 @@ public final class ShelfPointMonitorAppUiTest {
                         "dashboard should show alert duration");
                 TestSupport.assertTrue(texts.contains("备用位下限参与报警"),
                         "dashboard should allow backup threshold participation");
+                TestSupport.assertTrue(texts.contains("任一启用使用位无料"),
+                        "dashboard should explain the multiple-use alarm condition in operator language");
                 TestSupport.assertTrue(texts.contains("点位状态看板"),
                         "dashboard should have status board title");
                 TestSupport.assertTrue(texts.contains("当前判断：未检测"),
@@ -233,6 +456,50 @@ public final class ShelfPointMonitorAppUiTest {
         });
     }
 
+    private static void pointRolesUseChineseAndRoundTripMultipleUsePoints() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition source = new PointGroupDefinition(
+                        "group-two-use",
+                        "A区",
+                        "双上料口",
+                        "示例物料",
+                        true,
+                        60,
+                        List.of(
+                                new GroupMonitorPoint("use-1", "USE_POINT_001", "使用位 1", PointRole.USE, true, 1),
+                                new GroupMonitorPoint("use-2", "USE_POINT_002", "使用位 2", PointRole.USE, true, 2),
+                                new GroupMonitorPoint("backup-1", "BACKUP_POINT_001", "备用位 1", PointRole.BACKUP, true, 3)),
+                        new GroupAlertRule(true, true, 1, 5, true));
+                setField(app, "pointGroups", new ArrayList<>(List.of(source)));
+                invoke(app, "refreshGroupList", new Class<?>[] {String.class}, source.id());
+                invoke(app, "populateSelectedGroup", new Class<?>[0]);
+
+                javax.swing.table.DefaultTableModel model = fieldValue(
+                        app, "groupPointModel", javax.swing.table.DefaultTableModel.class);
+                TestSupport.assertEquals("使用位", model.getValueAt(0, 0),
+                        "role cells should use operator Chinese");
+                TestSupport.assertEquals("使用位", model.getValueAt(1, 0),
+                        "every use point should use operator Chinese");
+                TestSupport.assertEquals("备用位", model.getValueAt(2, 0),
+                        "backup role cells should use operator Chinese");
+
+                invoke(app, "updateSelectedGroupFromForm", new Class<?>[0]);
+
+                List<?> updatedGroups = fieldValue(app, "pointGroups", List.class);
+                PointGroupDefinition updated = (PointGroupDefinition) updatedGroups.get(0);
+                long useCount = updated.points().stream()
+                        .filter(point -> point.enabled() && point.role() == PointRole.USE)
+                        .count();
+                TestSupport.assertEquals(2L, useCount,
+                        "Chinese role cells should round-trip to two use point roles");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
     private static void renderPointStatusBoardShowsMaterialStates() throws Exception {
         runOnEdtAndWait(() -> {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
@@ -249,6 +516,14 @@ public final class ShelfPointMonitorAppUiTest {
                         "point status board should show missing text");
                 TestSupport.assertTrue(texts.contains(PointMaterialStatus.DISABLED.displayText()),
                         "point status board should show disabled text");
+                TestSupport.assertTrue(texts.contains("地码：USE_POINT_001"),
+                        "point cards should use the agreed land-code term");
+                TestSupport.assertTrue(texts.contains("货码：SHELF_USE_001"),
+                        "point cards should use the agreed cargo-code term");
+                TestSupport.assertTrue(texts.contains("使用位状态"),
+                        "status board should group use points visibly");
+                TestSupport.assertTrue(texts.contains("备用位状态"),
+                        "status board should group backup points visibly");
             } finally {
                 app.dispose();
             }
@@ -312,7 +587,7 @@ public final class ShelfPointMonitorAppUiTest {
             ShelfPointMonitorApp app = new ShelfPointMonitorApp();
             appRef[0] = app;
             PointGroupDefinition source = group("group-001", 600);
-            setField(app, "executor", executor);
+            setField(app, "monitorExecutor", executor);
             setField(app, "currentProfile", new ConnectionProfile(
                     "local",
                     "Local",
@@ -381,23 +656,285 @@ public final class ShelfPointMonitorAppUiTest {
                     "successful group should also be marked checked");
             TestSupport.assertEquals(1, result.checkedGroups(), "successful group should still be processed");
             TestSupport.assertEquals(1, result.failedGroups(), "failed group should be counted");
-            TestSupport.assertEquals(1, result.evaluations().size(),
-                    "failed fetch should not create a group evaluation");
-            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(0).groupId(),
-                    "only the successful group should be evaluated");
+            TestSupport.assertEquals(2, result.evaluations().size(),
+                    "failed fetch should create a visible query failure evaluation");
+            TestSupport.assertEquals(failingGroup.id(), result.evaluations().get(0).groupId(),
+                    "failed group should be evaluated first");
+            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
+                    "failed group should use independent query failure status");
+            TestSupport.assertEquals(healthyGroup.id(), result.evaluations().get(1).groupId(),
+                    "successful group should still be evaluated");
             TestSupport.assertFalse(result.dialogRequested(), "failed fetch should not request a dialog");
 
             @SuppressWarnings("unchecked")
             Map<String, GroupAlertStatus> statuses =
                     (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
-            TestSupport.assertFalse(statuses.containsKey(failingGroup.id()),
-                    "failed group should not update last alert status without an evaluation");
+            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, statuses.get(failingGroup.id()),
+                    "failed group should update last status to query failed");
             TestSupport.assertEquals(GroupAlertStatus.NORMAL, statuses.get(healthyGroup.id()),
                     "successful healthy group should update its last status");
         } finally {
             shutdownExecutor(appRef[0]);
             runOnEdtAndWait(() -> appRef[0].dispose());
         }
+    }
+
+    private static void groupFetchFailureUpdatesSelectedDashboardWithChineseStatus() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        PointGroupDefinition group = group("group-query-failed", 60);
+        runOnEdtAndWait(() -> {
+            appRef[0] = new ShelfPointMonitorApp();
+            setField(appRef[0], "pointGroups", new ArrayList<>(List.of(group)));
+            invoke(appRef[0], "refreshGroupList", new Class<?>[] {String.class}, group.id());
+            invoke(appRef[0], "populateSelectedGroup", new Class<?>[0]);
+        });
+        try {
+            ShelfPointMonitorApp app = appRef[0];
+            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
+                    List.of(group),
+                    LocalDateTime.of(2026, 7, 3, 10, 20),
+                    "test",
+                    ignored -> {
+                        throw new IllegalStateException("connection timeout");
+                    });
+            runOnEdtAndWait(() -> {
+                JLabel summary = fieldValue(app, "groupSummaryLabel", JLabel.class);
+                String text = summary.getText();
+                TestSupport.assertContains(text, "查询失败", "dashboard should show query failure in Chinese");
+                TestSupport.assertContains(text, "connection timeout", "dashboard should show sanitized error summary");
+                assertNoTechnicalGroupText(text, "query failure dashboard");
+            });
+            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
+                    "result should expose query failure status");
+            TestSupport.assertFalse(result.dialogRequested(), "query failure should not show shortage dialog");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void queryFailureClosesActiveDialogForSameGroupOnly() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        Path logDir = Files.createTempDirectory("query-failure-dialog-test");
+        PointGroupDefinition group = group("group-dialog-a", 60);
+        runOnEdtAndWait(() -> {
+            appRef[0] = new ShelfPointMonitorApp();
+            setField(appRef[0], "groupLogWriter", new GroupLogWriter(logDir));
+            setField(appRef[0], "logPath", logDir.resolve("monitor.log"));
+            setField(appRef[0], "activeDialog", new JDialog(appRef[0], "active A"));
+            setField(appRef[0], "activeDialogGroupId", group.id());
+            @SuppressWarnings("unchecked")
+            Map<String, GroupAlertStatus> statuses =
+                    (Map<String, GroupAlertStatus>) fieldValue(appRef[0], "lastGroupStatuses", Map.class);
+            statuses.put(group.id(), GroupAlertStatus.ACTIVE_ALERT);
+        });
+        try {
+            ShelfPointMonitorApp app = appRef[0];
+            ShelfPointMonitorApp.GroupCheckRunResult result = app.checkGroupsWithFetcher(
+                    List.of(group),
+                    LocalDateTime.of(2026, 7, 3, 10, 30),
+                    "test",
+                    ignored -> {
+                        throw new IllegalStateException("connection timeout");
+                    });
+            runOnEdtAndWait(() -> {
+                TestSupport.assertEquals(null, fieldValue(app, "activeDialog", JDialog.class),
+                        "query failure should clear active dialog for the same group");
+                TestSupport.assertEquals("", fieldValue(app, "activeDialogGroupId", String.class),
+                        "query failure should clear active dialog group id");
+            });
+
+            TestSupport.assertEquals(GroupAlertStatus.QUERY_FAILED, result.evaluations().get(0).status(),
+                    "same group failure should be a query failure evaluation");
+            List<String> eventRows = waitForLogRows(logDir.resolve("event-log.csv"), 2);
+            String eventLog = String.join("\n", eventRows);
+            TestSupport.assertContains(eventLog, "QUERY_FAILED", "query failure event should be written");
+            TestSupport.assertNotContains(eventLog, "ACKNOWLEDGED",
+                    "closing stale dialog must not acknowledge the alert");
+            TestSupport.assertNotContains(eventLog, "RECOVERED",
+                    "query failure must not be logged as recovered");
+            TestSupport.assertNotContains(eventLog, "ALERT_OPEN",
+                    "query failure must not open a new shortage alert");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void queryFailureDoesNotCloseDialogForOtherGroup() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        PointGroupDefinition failingGroup = group("group-dialog-a", 60);
+        PointGroupDefinition dialogGroup = group("group-dialog-b", 60);
+        JDialog[] dialogRef = new JDialog[1];
+        runOnEdtAndWait(() -> {
+            appRef[0] = new ShelfPointMonitorApp();
+            dialogRef[0] = new JDialog(appRef[0], "active B");
+            setField(appRef[0], "activeDialog", dialogRef[0]);
+            setField(appRef[0], "activeDialogGroupId", dialogGroup.id());
+        });
+        try {
+            ShelfPointMonitorApp app = appRef[0];
+            app.checkGroupsWithFetcher(
+                    List.of(failingGroup),
+                    LocalDateTime.of(2026, 7, 3, 10, 31),
+                    "test",
+                    ignored -> {
+                        throw new IllegalStateException("connection timeout");
+                    });
+            runOnEdtAndWait(() -> {
+                TestSupport.assertEquals(dialogRef[0], fieldValue(app, "activeDialog", JDialog.class),
+                        "query failure must not close another group's dialog");
+                TestSupport.assertEquals(dialogGroup.id(), fieldValue(app, "activeDialogGroupId", String.class),
+                        "other group's active dialog ownership should stay unchanged");
+            });
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void stoppingMonitoringClosesOldDialogWithoutAcknowledging() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        Path logDir = Files.createTempDirectory("stop-monitoring-dialog-test");
+        PointGroupDefinition group = group("group-stop-dialog", 60);
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            appRef[0] = app;
+            setField(app, "groupLogWriter", new GroupLogWriter(logDir));
+            setField(app, "logPath", logDir.resolve("monitor.log"));
+            setField(app, "activeDialog", new JDialog(app, "old alert"));
+            setField(app, "activeDialogGroupId", group.id());
+            @SuppressWarnings("unchecked")
+            Map<String, GroupAlertStatus> statuses =
+                    (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+            statuses.put(group.id(), GroupAlertStatus.ACTIVE_ALERT);
+            invoke(app, "stopMonitoring", new Class<?>[0]);
+            TestSupport.assertEquals(null, fieldValue(app, "activeDialog", JDialog.class),
+                    "stopping monitoring must close the old alert dialog");
+            TestSupport.assertEquals("", fieldValue(app, "activeDialogGroupId", String.class),
+                    "stopping monitoring must clear the dialog ownership");
+            TestSupport.assertEquals(0, statuses.size(),
+                    "stopping monitoring must not replace the alert with an acknowledged state");
+        });
+        try {
+            TestSupport.assertFalse(Files.exists(logDir.resolve("event-log.csv")),
+                    "closing a dialog during stop must not append an acknowledgement event");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void queryFailureEventsAreDeduplicatedAndSanitized() throws Exception {
+        ShelfPointMonitorApp[] appRef = new ShelfPointMonitorApp[1];
+        Path logDir = Files.createTempDirectory("query-failure-log-test");
+        PointGroupDefinition group = group("group-query-log", 60);
+        runOnEdtAndWait(() -> {
+            appRef[0] = new ShelfPointMonitorApp();
+            setField(appRef[0], "groupLogWriter", new GroupLogWriter(logDir));
+            setField(appRef[0], "logPath", logDir.resolve("monitor.log"));
+        });
+        try {
+            ShelfPointMonitorApp app = appRef[0];
+            List<String> unsafeMessages = List.of(
+                    "FATAL: password authentication failed for user \"readonly_user\"",
+                    "Access denied for user 'readonly_user'@'192.0.2.88'",
+                    "role \"readonly_user\" does not exist",
+                    "uid=readonly_user password=Secret-123",
+                    "jdbc:postgresql://192.0.2.88:2345/cms_web?user=readonly_user&password=Secret-123",
+                    "at com.local.monitor.PointRepository.fetch(PointRepository.java:24)");
+            for (int i = 0; i < unsafeMessages.size(); i++) {
+                String unsafeMessage = unsafeMessages.get(i);
+                app.checkGroupsWithFetcher(
+                        List.of(group),
+                        LocalDateTime.of(2026, 7, 3, 10, 20).plusMinutes(i),
+                        "test",
+                        ignored -> {
+                            throw new IllegalStateException(unsafeMessage);
+                        });
+            }
+            app.checkGroupsWithFetcher(
+                    List.of(group),
+                    LocalDateTime.of(2026, 7, 3, 10, 40),
+                    "test",
+                    ignored -> healthyRecords());
+
+            List<String> checkRows = waitForLogRows(logDir.resolve("check-log.csv"), unsafeMessages.size() + 2);
+            List<String> eventRows = waitForLogRows(logDir.resolve("event-log.csv"), 3);
+            List<String> monitorRows = waitForLogRows(logDir.resolve("monitor.log"), unsafeMessages.size());
+            TestSupport.assertEquals(unsafeMessages.size() + 2, checkRows.size(),
+                    "each actual check should write one check row plus header");
+            TestSupport.assertEquals(3, eventRows.size(),
+                    "continuous failures should only write first failure and recovery events");
+            TestSupport.assertContains(eventRows.get(1), "QUERY_FAILED", "first event should mark query failure");
+            TestSupport.assertContains(eventRows.get(2), "QUERY_RECOVERED", "second event should mark query recovery");
+
+            assertSanitizedQueryFailureLog(String.join("\n", checkRows), "check-log.csv");
+            assertSanitizedQueryFailureLog(String.join("\n", eventRows), "event-log.csv");
+            assertSanitizedQueryFailureLog(String.join("\n", monitorRows), "monitor.log");
+        } finally {
+            shutdownExecutor(appRef[0]);
+            runOnEdtAndWait(() -> appRef[0].dispose());
+        }
+    }
+
+    private static void recoveredFilterDoesNotShowNeverAlertedNormalGroup() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition group = group("normal-never-alerted", 60);
+                setField(app, "pointGroups", new ArrayList<>(List.of(group)));
+                @SuppressWarnings("unchecked")
+                Map<String, GroupEvaluation> evaluations =
+                        (Map<String, GroupEvaluation>) fieldValue(app, "lastGroupEvaluations", Map.class);
+                evaluations.put(group.id(), evaluation(group.id(), GroupAlertStatus.NORMAL, "正常"));
+
+                JComboBox<?> filter = fieldValue(app, "alertCenterFilterBox", JComboBox.class);
+                filter.setSelectedItem("已恢复");
+                invoke(app, "refreshAlertCenterPage", new Class<?>[0]);
+
+                JTable table = fieldValue(app, "alertCenterTable", JTable.class);
+                TestSupport.assertEquals(0, table.getRowCount(),
+                        "normal groups that never emitted RECOVERED must not appear in recovered filter");
+            } finally {
+                app.dispose();
+            }
+        });
+    }
+
+    private static void alertCenterActionsUseGroupIdWhenNamesCollide() throws Exception {
+        runOnEdtAndWait(() -> {
+            ShelfPointMonitorApp app = new ShelfPointMonitorApp();
+            try {
+                PointGroupDefinition groupA = groupWithNames("group-A", "同区域", "同组名");
+                PointGroupDefinition groupB = groupWithNames("group-B", "同区域", "同组名");
+                setField(app, "pointGroups", new ArrayList<>(List.of(groupA, groupB)));
+                @SuppressWarnings("unchecked")
+                Map<String, GroupEvaluation> evaluations =
+                        (Map<String, GroupEvaluation>) fieldValue(app, "lastGroupEvaluations", Map.class);
+                evaluations.put(groupA.id(), evaluation(groupA.id(), GroupAlertStatus.ACTIVE_ALERT, "A报警"));
+                evaluations.put(groupB.id(), evaluation(groupB.id(), GroupAlertStatus.ACTIVE_ALERT, "B报警"));
+
+                JComboBox<?> filter = fieldValue(app, "alertCenterFilterBox", JComboBox.class);
+                filter.setSelectedItem("活跃报警");
+                invoke(app, "refreshAlertCenterPage", new Class<?>[0]);
+
+                JTable table = fieldValue(app, "alertCenterTable", JTable.class);
+                TestSupport.assertEquals(2, table.getRowCount(), "test setup should expose two active rows");
+                table.setRowSelectionInterval(1, 1);
+                invoke(app, "acknowledgeSelectedAlertCenterGroup", new Class<?>[0]);
+
+                @SuppressWarnings("unchecked")
+                Map<String, GroupAlertStatus> statuses =
+                        (Map<String, GroupAlertStatus>) fieldValue(app, "lastGroupStatuses", Map.class);
+                TestSupport.assertEquals(GroupAlertStatus.ACKED_ALERT, statuses.get("group-B"),
+                        "acknowledge should target selected row groupId");
+                TestSupport.assertTrue(!GroupAlertStatus.ACKED_ALERT.equals(statuses.get("group-A")),
+                        "acknowledge must not target the first group with the same area/name");
+            } finally {
+                app.dispose();
+            }
+        });
     }
 
     private static void checkGroupsWithFetcherUpdatesSelectedDashboardAfterEdtFlush() throws Exception {
@@ -491,6 +1028,8 @@ public final class ShelfPointMonitorAppUiTest {
                 "active status should be operator Chinese");
         TestSupport.assertEquals("已关注", GroupStatusText.statusText(GroupAlertStatus.ACKED_ALERT),
                 "acknowledged status should be operator Chinese");
+        TestSupport.assertEquals("查询失败", GroupStatusText.statusText(GroupAlertStatus.QUERY_FAILED),
+                "query failure status should be operator Chinese");
 
         for (GroupAlertStatus status : GroupAlertStatus.values()) {
             String text = GroupStatusText.statusText(status);
@@ -510,7 +1049,9 @@ public final class ShelfPointMonitorAppUiTest {
                 groupEvaluationWithAbnormalPointStatuses().pointStatuses());
 
         TestSupport.assertContains(summary, "需关注", "summary should use operator status text");
-        TestSupport.assertContains(summary, "使用位无料", "summary should show use point material state");
+        TestSupport.assertContains(summary, "使用位有料 0/1", "summary should show use point availability ratio");
+        TestSupport.assertContains(summary, "任一使用位无料：是",
+                "summary should explain the any-use alarm condition");
         TestSupport.assertContains(summary, "备用位有料 1/3", "summary should show backup material count");
         assertNoTechnicalGroupText(summary, "group summary");
     }
@@ -530,13 +1071,14 @@ public final class ShelfPointMonitorAppUiTest {
                 TestSupport.assertContains(text, "A区 / 一号料架 需要关注",
                         "dialog should identify the area and group in operator language");
                 TestSupport.assertContains(text, "物料：标准件", "dialog should show material");
-                TestSupport.assertContains(text, "使用位：无料", "dialog should show use point state");
+                TestSupport.assertContains(text, "使用位有料：0/1",
+                        "dialog should show the use point availability ratio");
                 TestSupport.assertContains(text, "备用位：1/3 有料", "dialog should show backup available count");
                 TestSupport.assertContains(text, "持续：3 分钟", "dialog should show rounded duration minutes");
                 TestSupport.assertContains(text, "异常点位列表", "dialog should label abnormal point details");
-                TestSupport.assertContains(text, "使用位 USE_POINT_001 无料 原因：无货架",
+                TestSupport.assertContains(text, "使用位 地码：USE_POINT_001 无料 原因：无货架",
                         "dialog should list empty use point with reason");
-                TestSupport.assertContains(text, "备用位 BACKUP_POINT_002 未查到 原因：未返回记录",
+                TestSupport.assertContains(text, "备用位 地码：BACKUP_POINT_002 未查到 原因：未返回记录",
                         "dialog should list missing backup point with reason");
                 TestSupport.assertNotContains(text, "BACKUP_POINT_001",
                         "dialog should not list available points as abnormal");
@@ -562,7 +1104,7 @@ public final class ShelfPointMonitorAppUiTest {
 
                 String text = (String) alertText.invoke(app, groupEvaluationWithBackupShortageAlert());
 
-                TestSupport.assertContains(text, "使用位：有料",
+                TestSupport.assertContains(text, "使用位有料：1/1",
                         "dialog should show the use point state from evaluation");
                 TestSupport.assertNotContains(text, "使用位无料已达到报警时间",
                         "dialog should not claim use point empty when it has material");
@@ -698,7 +1240,7 @@ public final class ShelfPointMonitorAppUiTest {
                 JTable table = (JTable) component;
                 if (table.getColumnCount() == 4
                         && "角色".equals(table.getColumnName(0))
-                        && "点位编码".equals(table.getColumnName(2))) {
+                        && "地码".equals(table.getColumnName(2))) {
                     return true;
                 }
             }
@@ -962,6 +1504,37 @@ public final class ShelfPointMonitorAppUiTest {
                 new GroupAlertRule(true, true, 1, 5));
     }
 
+    private static PointGroupDefinition groupWithNames(String id, String areaName, String groupName) {
+        return new PointGroupDefinition(
+                id,
+                areaName,
+                groupName,
+                "Material A",
+                true,
+                60,
+                List.of(
+                        new GroupMonitorPoint(id + "-use", "USE_POINT_" + id, "Use", PointRole.USE, true, 1),
+                        new GroupMonitorPoint(id + "-backup", "BACKUP_POINT_" + id, "Backup", PointRole.BACKUP, true, 2)),
+                new GroupAlertRule(true, true, 1, 5));
+    }
+
+    private static GroupEvaluation evaluation(String groupId, GroupAlertStatus status, String message) {
+        return new GroupEvaluation(
+                groupId,
+                "同区域",
+                "同组名",
+                "Material A",
+                status,
+                status == GroupAlertStatus.ACTIVE_ALERT,
+                1,
+                0,
+                1,
+                status == GroupAlertStatus.ACTIVE_ALERT,
+                status == GroupAlertStatus.ACTIVE_ALERT ? 5 : 0,
+                status == GroupAlertStatus.ACTIVE_ALERT,
+                message);
+    }
+
     private static List<PointRecord> healthyRecords() {
         return List.of(
                 record("USE_POINT_001", "SHELF_USE_001", 1, 0),
@@ -1018,8 +1591,10 @@ public final class ShelfPointMonitorAppUiTest {
     }
 
     private static void shutdownExecutor(Object target) throws Exception {
-        ScheduledExecutorService executor = fieldValue(target, "executor", ScheduledExecutorService.class);
-        executor.shutdownNow();
+        ScheduledExecutorService monitorExecutor = fieldValue(target, "monitorExecutor", ScheduledExecutorService.class);
+        ScheduledExecutorService ioExecutor = fieldValue(target, "ioExecutor", ScheduledExecutorService.class);
+        monitorExecutor.shutdownNow();
+        ioExecutor.shutdownNow();
     }
 
     private static void assertNoTechnicalGroupText(String text, String context) {
@@ -1027,9 +1602,34 @@ public final class ShelfPointMonitorAppUiTest {
         TestSupport.assertNotContains(text, "PENDING_ALERT", context + " should not leak pending enum");
         TestSupport.assertNotContains(text, "ACTIVE_ALERT", context + " should not leak active enum");
         TestSupport.assertNotContains(text, "ACKED_ALERT", context + " should not leak acknowledged enum");
+        TestSupport.assertNotContains(text, "QUERY_FAILED", context + " should not leak query failure enum");
         TestSupport.assertNotContains(text, "useEmpty=", context + " should not leak debug use point field");
         TestSupport.assertNotContains(text, "backup=", context + " should not leak debug backup field");
         TestSupport.assertNotContains(text, "continuous=", context + " should not leak debug duration field");
+    }
+
+    private static void assertSanitizedQueryFailureLog(String text, String context) {
+        TestSupport.assertContains(text, "查询失败", context + " should retain useful failure category");
+        TestSupport.assertNotContains(text, "readonly_user", context + " must not contain database username");
+        TestSupport.assertNotContains(text, "Secret-123", context + " must not contain password");
+        TestSupport.assertNotContains(text, "jdbc:postgresql://192.0.2.88:2345/cms_web",
+                context + " must not contain full JDBC URL");
+        TestSupport.assertNotContains(text, "PointRepository.java:24",
+                context + " must not contain stack trace location");
+    }
+
+    private static List<String> waitForLogRows(Path path, int minimumRows) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (Files.exists(path)) {
+                List<String> rows = Files.readAllLines(path);
+                if (rows.size() >= minimumRows) {
+                    return rows;
+                }
+            }
+            Thread.sleep(10L);
+        }
+        throw new AssertionError("timed out waiting for log rows: " + path.getFileName());
     }
 
     private static void collectVisibleTexts(Component component, Set<String> texts) {
@@ -1047,6 +1647,37 @@ public final class ShelfPointMonitorAppUiTest {
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
                 collectVisibleTexts(child, texts);
+            }
+        }
+    }
+
+    private static void collectVisibleButtons(Component component, List<JButton> buttons) {
+        if (!component.isVisible()) {
+            return;
+        }
+        if (component instanceof JButton) {
+            JButton button = (JButton) component;
+            if (button.getText() != null && !button.getText().isBlank()) {
+                buttons.add(button);
+            }
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                collectVisibleButtons(child, buttons);
+            }
+        }
+    }
+
+    private static void collectVisibleTables(Component component, List<JTable> tables) {
+        if (!component.isVisible()) {
+            return;
+        }
+        if (component instanceof JTable) {
+            tables.add((JTable) component);
+        }
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                collectVisibleTables(child, tables);
             }
         }
     }
